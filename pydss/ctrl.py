@@ -10,7 +10,7 @@ import numba
 import numpy as np 
 from numba import jitclass          # import the decorator
 from numba import int32, float64 , int64   # import the types
-
+import json
 
 pi_spec = [
     ('N_states', int32),               # a simple scalar field
@@ -64,6 +64,89 @@ class pi(object):
         return self.h
 
 
+@numba.jit(nopython=True)
+def park(abc,theta):
+        pi = np.pi
+        T_park =np.zeros((3,3))
+        T_park[0,0:3] = 2.0/3.0*np.array([np.cos(theta), np.cos(theta-2.0/3.0*pi), np.cos(theta-4.0/3.0*pi)])
+        T_park[1,0:3] = 2.0/3.0*np.array([np.sin(theta), np.sin(theta-2.0/3.0*pi), np.sin(theta-4.0/3.0*pi)])
+        T_park[2,0:3] = 2.0/3.0*np.array([        0.5,                0.5,                0.5])
+
+        dq0 = T_park @ abc
+        
+        return dq0
+
+@numba.jit(nopython=True)
+def ipark(dq0,theta):
+        pi = np.pi
+        T_inv_park =np.zeros((3,3))
+        T_inv_park[0,0:3] = np.array([           np.cos(theta),  np.sin(theta),            1.0])
+        T_inv_park[1,0:3] = np.array([np.cos(theta-2.0/3.0*pi),  np.sin(theta-2.0/3.0*pi), 1.0])
+        T_inv_park[2,0:3] = np.array([np.cos(theta-4.0/3.0*pi),  np.sin(theta-4.0/3.0*pi), 1.0])
+       
+        abc = T_inv_park @ dq0
+        
+        return abc
+    
+ 
+pi = np.pi
+T_clark =np.zeros((3,3))
+T_clark[0,0:3] = 2.0/3.0*np.array([np.cos(0.0), np.cos(0.0-2.0/3.0*pi), np.cos(0.0-4.0/3.0*pi)])
+T_clark[1,0:3] = 2.0/3.0*np.array([np.sin(0.0), np.sin(0.0-2.0/3.0*pi), np.sin(0.0-4.0/3.0*pi)])
+T_clark[2,0:3] = 2.0/3.0*np.array([        0.5,                0.5,                0.5])
+
+
+T_inv_clark =np.zeros((3,3))
+T_inv_clark[0,0:3] = np.array([        np.cos(0.0),  np.sin(0.0),         1.0])
+T_inv_clark[1,0:3] = np.array([np.cos(-2.0/3.0*pi),  np.sin(-2.0/3.0*pi), 1.0])
+T_inv_clark[2,0:3] = np.array([np.cos(-4.0/3.0*pi),  np.sin(-4.0/3.0*pi), 1.0])
+      
+@numba.jit(nopython=True)
+def clark(abc):
+    if abc.shape[1] == 1:
+        dq0 = T_clark @ abc  
+    if abc.shape[1] > 1:
+        N_samples = abc.shape[1]
+        dq0 = np.zeros((3,N_samples))
+        for it in range(N_samples):
+            dq0[:,it]  = T_clark @ abc[:,it]
+    return dq0
+
+@numba.jit(nopython=True)
+def iclark(dq0):      
+        abc = T_inv_clark @ dq0        
+        return abc
+        
+
+@numba.jit(nopython=True)
+def park2(abc,t,omega):
+    if abc.shape[1] == 1:
+        dq = np.zeros((2,1),dtype=np.complex128)
+        ab0 = T_clark @ abc 
+        aux = (ab0[0] +1j * ab0[1]) * np.exp(1j*omega*t)
+        dq[0] = aux.real
+        dq[1] = aux.imag
+        
+        
+    if abc.shape[1] > 1:
+        N_samples = abc.shape[1]
+        dq = np.zeros((2,N_samples),dtype=np.complex128)
+        for it in range(N_samples):
+            ab0_v  = T_clark @ abc[:,it]
+            #print(ab0_v)
+            aux_v = (ab0_v[0] +1j * ab0_v[1]) * np.exp(1j*omega*t[it])
+            dq[0,it] = aux_v.real
+            dq[1,it] = aux_v.imag
+    return dq
+    
+    
+@numba.jit(nopython=True)
+def interp(x,X,Y):
+    
+    idx = np.argmax(X>x)-1
+    return (Y[idx+1] - Y[idx])/ (X[idx+1] - X[idx]) * (x - X[idx]) + Y[idx]    
+    
+    
 spec = [
     ('N_states', int32),               # a simple scalar field
     ('R', float64), 
@@ -367,9 +450,153 @@ def run():
     return T,X
     
 
+class secondary(object):
+    
+    def __init__(self,json_file):
+        
+        json_data = open(json_file).read().replace("'",'"')
+        data = json.loads(json_data)
+        
+        secondaries = data['secondary']
+        
+        dt_secondary = np.dtype([('ctrl_mode', 'int32'),('Dt_secondary', np.float64),('S_base', np.float64),
+                       ('K_p_v',np.float64),('K_i_v',np.float64),('K_p_p',np.float64),('K_i_p',np.float64),
+                       ('V',np.float64),('V_ref',np.float64),
+                       ('DV',np.float64),
+                       ('x',np.float64,(2,1)),('f',np.float64,(2,1))
+                        ])
+            
+        
+        secondary_list = []
+        
+        for item in secondaries:
+            secondary_list += [(item['ctrl_mode'],item['Dt_secondary'],item['S_base'],
+                          item['K_p_v'], item['K_i_v'],item['K_p_p'], item['K_i_p'],
+                          231.0,231.0,
+                          0.0,
+                          np.zeros((2,1)),np.zeros((2,1))
+                          )]
+            
+        self.secondary_list = secondary_list
+        self.params_secondary = np.rec.array(secondary_list,dtype=dt_secondary)    
+        
+        
+@numba.jit(nopython=True,cache=True)
+def secondary_ctrl(t,mode,params, params_vsc):
+    '''
+    0: 'fix'
+    1: 'v'
+    2:  
+    3:  
+    4:  
+    5:  
+        
+    DV: single reference     
+    DV_remote: multiple references    
+    '''
+    
+    ctrl_mode = params[0].ctrl_mode  
+    S_base = params[0].S_base  
+    K_p_v = params[0].K_p_v  
+    K_i_v = params[0].K_i_v 
+    K_p_p = params[0].K_p_p  
+    K_i_p = params[0].K_i_p     
+    V = params[0].V
+    V_ref = params[0].V_ref
+#    
+    
+    if mode == 1:
+        
+        if params[0].ctrl_mode == 0: # 'fix'
+            params[0].DV = 0.0 
+            
+
+        if params[0].ctrl_mode == 1:  # 'v'
+
+            V_mean = V
+            error =  V_ref - V_mean
+            params[0].f[0] = error
+            
+        if params[0].ctrl_mode == 2:  # 'p'
+            S_total = np.sum(params_vsc.S_base)
+            
+            
+            P_demand_est = 0.0
+            for it in range(2):
+                P_demand_est += np.sum(params_vsc[it].S[:]).real
+            
+            for it in range(2):
+                P_ref = P_demand_est * params_vsc[it].S_base/S_total
+                DP = P_ref - np.sum(params_vsc[it].S.real)          # from VSCs controllers
+                   
+                error = DP
+                if error> 1000e3:
+                    error = 1000e3
+                if error< -1000e3:
+                    error = -1000e3 
+
+                params[0].f[it] = error                          
+
+    if mode == 2:
+        
+        if params[0].ctrl_mode == 0: # 'fix'
+            DV = 0.0
+            
+        if params[0].ctrl_mode == 1:  # 'v'
+            
+            V_mean = np.abs(params[0].V)
+            error =  231.0 - V_mean
+#            print(V_mean)
+            DV = K_p_v*error + K_i_v * params[it].x[0,0]
+                        
+            params[0].DV = DV
+            
+            for it in range(2):           
+                params_vsc[it].DV_remote = DV
+
+        if params[0].ctrl_mode == 2:  # 'p'
+            S_total = np.sum(params_vsc.S_base)
+            P_demand_est = 0.0
+            for it in range(2):
+                P_demand_est += np.abs(np.sum(params_vsc[it].S[:]).real )
+
+            for it in range(2):
+                P_ref = P_demand_est * params_vsc[it].S_base/S_total
+                DP = P_ref - np.sum(params_vsc[it].S.real)
+
+                DV = K_p_p*DP/S_base + K_i_p/S_base*params[0].x[it,0]
+                if DV >10.0:
+                    DV =10.0
+                    params[0].f[it] = 0.0
+                if DV < -10.0:
+                    DV = -10.0
+                    params[0].f[it] = 0.0
+                params_vsc[it].DV_remote = DV
+
+
+                    
+#                self.DV_array[it] = DV
+        
+
+         
+         
 if __name__ == "__main__":
     
-    test_model = 'pi'
+    test_model = 'clark'
+    
+    if test_model == 'clark':
+        import electric
+        T = np.linspace(0.0,0.04,400)
+        V_peak = 400.0*np.sqrt(2.0/3.0)
+        V_a = V_peak*np.exp(1j*np.deg2rad(0.0))   
+        V_b = V_peak*np.exp(1j*np.deg2rad(-120.0))   
+        V_c = V_peak*np.exp(1j*np.deg2rad(-240.0)) 
+        V_p = np.array([[V_a],[V_b],[V_c]]) # peak values
+        V = V_p/np.sqrt(2.0)
+        v_abc = electric.ph2inst(V_p,T)
+
+        v_dq0 = park2(v_abc,T,2.0*np.pi*50)
+        clark(v_abc)
 
     if test_model == 'pi':
         pi_1 = pi()

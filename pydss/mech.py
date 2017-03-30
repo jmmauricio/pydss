@@ -121,7 +121,10 @@ spec = [
     ('beta', float64),   
     ('nu', float64), 
     ('p_m', float64), 
-    ('Radio', float64),       
+    ('Radio', float64),
+    ('H', float64),
+    ('P_n', float64),   
+    ('n_n', float64)  
 ]
 @jitclass(spec)
 class wind_turbine(object):
@@ -144,16 +147,16 @@ class wind_turbine(object):
         
          
         
-        P_n = 30.0e3
-        n_n = 200.0
-        omega_n = n_n*2.0*np.pi/60
-        H = 3.5
+        self.P_n = 1.0e3
+        self.n_n = 750.0
+        omega_n = self.n_n*2.0*np.pi/60
+        self.H = 3.5
         
         # H = 0.5*J*omega_n**2/P_n
-        J = 2.0*H*P_n/(omega_n**2)
+        J = 2.0*self.H*self.P_n/(omega_n**2)
         
         # P = K_b*omega**2
-        K_b = 0.1*P_n/omega_n**2.0 
+        K_b = 0.1*self.P_n/omega_n**2.0 
         
         
         self.N_states = 1
@@ -166,7 +169,7 @@ class wind_turbine(object):
         self.tau_t = 0.0
         self.p_m = 0.0
         self.beta = 0.0
-        self.Radio = 10.0
+        self.Radio = 1.0
         self.nu = 10.0
         
         self.x[0] = omega_n
@@ -220,10 +223,24 @@ class wind_turbine(object):
         return np.array([omega])
 
 
+    def design(self):
+        
 
+        omega_n = self.n_n*2.0*np.pi/60
+        H = self.H
+        P_n = self.P_n
+        
+        # H = 0.5*J*omega_n**2/P_n
+        self.J = 2.0*H*P_n/(omega_n**2)
+        
+        # P = K_b*omega**2
+        self.K_b = 0.1*P_n/omega_n**2.0 
+        
+        
        
 
 if __name__ == "__main__":
     
     w1 = wind_turbine()
     w1.f_eval()
+    w1.design()
