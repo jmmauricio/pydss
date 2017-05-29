@@ -241,7 +241,7 @@ class pydss(object):
         
 
         
-    def pf_eval(self):
+    def pf(self):
         
         V_unknown_0 = np.zeros((self.N_nodes_i,1),dtype=np.complex128)+231 
         self.I_node = np.vstack((np.zeros((self.N_nodes_v,1)),
@@ -304,7 +304,7 @@ class pydss(object):
             self.perturbations_types = np.array(perturbations_types_list).reshape(N_perturbations,1)
         
         
-    def run_eval(self):
+    def run(self):
 
             self.read_perturbations()
             

@@ -30,7 +30,6 @@ def pf_eval(params,max_iter=20):
     
     for iteration in range(max_iter):
 
-    
         for it in range(pq_3pn_int.shape[0]):
             
             V_abc = V_unknown[pq_3pn_int[it][0:3],0]
@@ -38,7 +37,6 @@ def pf_eval(params,max_iter=20):
            
             I_known[pq_3pn_int[it][0:3],0] = np.conj(S_abc/V_abc)
             I_known[pq_3pn_int[it][3],0] =  -np.sum(I_known[pq_3pn_int[it][0:3],0])
-
         
         V_unknown = inv_Y_ii @ ( I_known - Y_iv @ V_known)
         
