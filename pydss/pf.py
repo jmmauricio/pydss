@@ -33,7 +33,6 @@ def pf_eval(params,max_iter=20):
     
         for it in range(pq_3pn_int.shape[0]):
             
-
             V_abc = V_unknown[pq_3pn_int[it][0:3],0]
             S_abc = pq_3pn[it,:]
            

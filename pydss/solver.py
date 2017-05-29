@@ -13,6 +13,8 @@ from numba import float64,int64
 
 
 
+
+
 #@numba.jit((float64,float64,int64,int64,float64[:],float64[:]),nopython=True)
 @numba.jit(nopython=True)
 def run(dt,t_end,decimation,N_states,param_diodes,x_0_diodes):

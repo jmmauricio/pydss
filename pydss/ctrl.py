@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+    #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Mon Feb 20 23:44:26 2017
@@ -66,27 +66,27 @@ class pi(object):
 
 @numba.jit(nopython=True)
 def park(abc,theta):
-        pi = np.pi
-        T_park =np.zeros((3,3))
-        T_park[0,0:3] = 2.0/3.0*np.array([np.cos(theta), np.cos(theta-2.0/3.0*pi), np.cos(theta-4.0/3.0*pi)])
-        T_park[1,0:3] = 2.0/3.0*np.array([np.sin(theta), np.sin(theta-2.0/3.0*pi), np.sin(theta-4.0/3.0*pi)])
-        T_park[2,0:3] = 2.0/3.0*np.array([        0.5,                0.5,                0.5])
+    pi = np.pi
+    T_park =np.zeros((3,3))
+    T_park[0,0:3] = 2.0/3.0*np.array([np.cos(theta), np.cos(theta-2.0/3.0*pi), np.cos(theta-4.0/3.0*pi)])
+    T_park[1,0:3] = 2.0/3.0*np.array([np.sin(theta), np.sin(theta-2.0/3.0*pi), np.sin(theta-4.0/3.0*pi)])
+    T_park[2,0:3] = 2.0/3.0*np.array([        0.5,                0.5,                0.5])
 
-        dq0 = T_park @ abc
-        
-        return dq0
+    dq0 = T_park @ abc
+    
+    return dq0
 
 @numba.jit(nopython=True)
 def ipark(dq0,theta):
-        pi = np.pi
-        T_inv_park =np.zeros((3,3))
-        T_inv_park[0,0:3] = np.array([           np.cos(theta),  np.sin(theta),            1.0])
-        T_inv_park[1,0:3] = np.array([np.cos(theta-2.0/3.0*pi),  np.sin(theta-2.0/3.0*pi), 1.0])
-        T_inv_park[2,0:3] = np.array([np.cos(theta-4.0/3.0*pi),  np.sin(theta-4.0/3.0*pi), 1.0])
-       
-        abc = T_inv_park @ dq0
-        
-        return abc
+    pi = np.pi
+    T_inv_park =np.zeros((3,3))
+    T_inv_park[0,0:3] = np.array([           np.cos(theta),  np.sin(theta),            1.0])
+    T_inv_park[1,0:3] = np.array([np.cos(theta-2.0/3.0*pi),  np.sin(theta-2.0/3.0*pi), 1.0])
+    T_inv_park[2,0:3] = np.array([np.cos(theta-4.0/3.0*pi),  np.sin(theta-4.0/3.0*pi), 1.0])
+   
+    abc = T_inv_park @ dq0
+    
+    return abc
     
  
 pi = np.pi
@@ -118,7 +118,7 @@ def iclark(dq0):
         return abc
         
 
-@numba.jit(nopython=True)
+#@numba.jit(nopython=True)
 def park2(abc,t,omega):
     if abc.shape[1] == 1:
         dq = np.zeros((2,1),dtype=np.complex128)
@@ -582,8 +582,16 @@ def secondary_ctrl(t,mode,params, params_vsc):
          
 if __name__ == "__main__":
     
-    test_model = 'clark'
-    
+    test_model = 'park2'
+
+    if test_model == 'park2':
+        abc = np.zeros((3,1000))
+        park2(abc,np.zeros(1000),0.0)
+        
+    if test_model == 'park':
+        abc = np.zeros((3,1))
+        ipark(abc,0.0)
+        
     if test_model == 'clark':
         import electric
         T = np.linspace(0.0,0.04,400)

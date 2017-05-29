@@ -13,66 +13,9 @@ import json
 import re
 import time
 from pf import pf_eval
-from electric import vsc,ctrl_vsc_phasor
-from ctrl import secondary,secondary_ctrl
-
-#lines = [
-#        {'bus_j': 'R1',  'bus_k': 'R2',  'code': 'UG1', 'm': 35.0, },
-#        {'bus_j': 'R2',  'bus_k': 'R3',  'code': 'UG1', 'm': 35.0, },
-#        {'bus_j': 'R3',  'bus_k': 'R4',  'code': 'UG1', 'm': 35.0, },
-#        {'bus_j': 'R4',  'bus_k': 'R5',  'code': 'UG1', 'm': 35.0, },
-#        {'bus_j': 'R5',  'bus_k': 'R6',  'code': 'UG1', 'm': 35.0, },
-#        {'bus_j': 'R6',  'bus_k': 'R7',  'code': 'UG1', 'm': 35.0, },
-#        {'bus_j': 'R7',  'bus_k': 'R8',  'code': 'UG1', 'm': 35.0, },
-#        {'bus_j': 'R8',  'bus_k': 'R9',  'code': 'UG1', 'm': 35.0, },
-#        {'bus_j': 'R9',  'bus_k': 'R10', 'code': 'UG1', 'm': 35.0, },
-#        {'bus_j': 'R3',  'bus_k': 'R11', 'code': 'UG3', 'm': 30.0, },
-#        {'bus_j': 'R4',  'bus_k': 'R12', 'code': 'UG3', 'm': 35.0, },
-#        {'bus_j': 'R12', 'bus_k': 'R13', 'code': 'UG3', 'm': 35.0, },
-#        {'bus_j': 'R13', 'bus_k': 'R14', 'code': 'UG3', 'm': 35.0, },
-#        {'bus_j': 'R14', 'bus_k': 'R15', 'code': 'UG3', 'm': 30.0, },
-#        {'bus_j': 'R6',  'bus_k': 'R16', 'code': 'UG3', 'm': 30.0, },
-#        {'bus_j': 'R9',  'bus_k': 'R17', 'code': 'UG3', 'm': 30.0, },
-#        {'bus_j': 'R10', 'bus_k': 'R18', 'code': 'UG3', 'm': 30.0, },
-#        ]
-#loads = [
-#        {'bus': 'R11', 'kVA': 15.0, 'fp': 0.95, 'type':'3P+N'},
-#        {'bus': 'R15', 'kVA': 52.0, 'fp': 0.95, 'type':'3P+N'},
-#        {'bus': 'R16', 'kVA': 55.0, 'fp': 0.95, 'type':'3P+N'},
-#        {'bus': 'R17', 'kVA': 35.0, 'fp': 0.95, 'type':'3P+N'},
-#        {'bus': 'R18', 'kVA': 47.0, 'fp': 0.95, 'type':'3P+N'},  
-#        ]
-#buses = [
-#        {'bus': 'R1',  'pos_x':   0, 'pos_y': -0*35, 'units':'m'},
-#        {'bus': 'R2',  'pos_x':   0, 'pos_y': -1*35, 'units':'m'},
-#        {'bus': 'R3',  'pos_x':   0, 'pos_y': -2*35, 'units':'m'},
-#        {'bus': 'R4',  'pos_x':   0, 'pos_y': -3*35, 'units':'m'},
-#        {'bus': 'R5',  'pos_x':   0, 'pos_y': -4*35, 'units':'m'},
-#        {'bus': 'R6',  'pos_x':   0, 'pos_y': -5*35, 'units':'m'},
-#        {'bus': 'R7',  'pos_x':   0, 'pos_y': -6*35, 'units':'m'},
-#        {'bus': 'R8',  'pos_x':   0, 'pos_y': -7*35, 'units':'m'},
-#        {'bus': 'R9',  'pos_x':   0, 'pos_y': -8*35, 'units':'m'},
-#        {'bus': 'R10', 'pos_x':   0, 'pos_y': -9*35, 'units':'m'},
-#        {'bus': 'R11', 'pos_x': -30, 'pos_y': -2*35, 'units':'m'},
-#        {'bus': 'R12', 'pos_x':  35, 'pos_y': -3*35, 'units':'m'},
-#        {'bus': 'R13', 'pos_x':  70, 'pos_y': -3*35, 'units':'m'},
-#        {'bus': 'R14', 'pos_x': 105, 'pos_y': -3*35, 'units':'m'},
-#        {'bus': 'R15', 'pos_x': 105, 'pos_y': -4*35, 'units':'m'},
-#        {'bus': 'R16', 'pos_x': -35, 'pos_y': -5*35, 'units':'m'},
-#        {'bus': 'R17', 'pos_x':  30, 'pos_y': -8*35, 'units':'m'},
-#        {'bus': 'R18', 'pos_x': -30, 'pos_y': -9*35, 'units':'m'}
-#        ]
-#v_sources = [
-#        {'bus': 'R1', 'kV':[00.22692174980229055]*3+[0], 'deg':[0,120,240,0], 'pos_x':0.0, 'pos_y':0}
-#        ]
-#adeg = 120.0
-#vscs = [
-#         {'bus':1, 'type':'v','kV':[0.231]*3+[0], 'deg':[0,adeg,adeg*2,0], 'pos_x':0.0, 'pos_y':0},
-#         {'bus':2, 'type':'i','A':[0.0]*3,'fp':[0.8]*3, 'pos_x':0.2, 'pos_y':0.0},
-#         {'bus':3, 'type':'i','A':[0.0]*3,'fp':[1.0]*3, 'pos_x':0.4, 'pos_y':0},
-#         {'bus':4, 'type':'i','A':[0.0]*3,'fp':[1.0]*3, 'pos_x':0.4, 'pos_y':-0.2},  
-#         {'bus':5, 'type':'i','A':[-10.0]*3,'fp':[1.0]*3, 'pos_x':0.6, 'pos_y':0},   
-#        ]
+from run import run_eval
+from electric import vsc,vsc_former
+from ctrl import secondary
 
 line_codes = {'OH1':[[0.540 + 0.777j, 0.049 + 0.505j, 0.049 + 0.462j, 0.049 + 0.436j],
                       [0.049 + 0.505j, 0.540 + 0.777j, 0.049 + 0.505j, 0.049 + 0.462j],
@@ -334,17 +277,47 @@ class pydss(object):
         self.I_node = I_node 
         self.params_pf = params_pf 
 
-
+    def read_perturbations(self):
+        
+        buses_names = [item['bus'] for item in self.loads]
+        p = self.data['perturbations']
+        N_perturbations = len(p)
+        
+        load_new_values_list = []
+        perturbations_int = []
+        perturbations_times_list = []
+        perturbations_types_list = []
+        
+        for it in range(N_perturbations):
+            if self.data['perturbations'][it]['type'] == 'load_new_value':
+                load_new_values_list += [np.hstack((np.array(p[it]['kw_abc'])*1000.0+np.array(p[it]['kvar_abc'])*1000.0j,np.array([0.0])))] 
+                perturbations_times_list += [p[it]['time']]
+                perturbations_types_list += [[1]]
+                perturbations_int += [buses_names.index(p[it]['bus'])]
+                
+        self.N_perturbations = N_perturbations  
+        
+        if self.N_perturbations>0:
+            self.load_new_values = np.array(load_new_values_list)
+            self.perturbations_int = np.array(perturbations_int).reshape(N_perturbations,1)
+            self.perturbations_times = np.array(perturbations_times_list).reshape(N_perturbations,1)     
+            self.perturbations_types = np.array(perturbations_types_list).reshape(N_perturbations,1)
+        
+        
     def run_eval(self):
 
+            self.read_perturbations()
             
-            secondary_obj = secondary(self.json_file)
-            vsc_objs = vsc(self.json_file)
-
+            if 'secondary' in self.data:
+                secondary_obj = secondary(self.json_file)
+            
+            if 'vsc' in self.data: vsc_objs = vsc(self.json_file)
+            if 'vsc_former' in self.data: vsc_former_objs = vsc_former(self.json_file)
+            
             params_secondary = secondary_obj.params_secondary
             self.params_secondary = params_secondary           
             
-            params_vsc = vsc_objs.params_vsc
+            params_vsc = vsc_former_objs.params_vsc
             self.params_vsc = params_vsc
             
             self.params_secondary = params_secondary
@@ -356,26 +329,37 @@ class pydss(object):
             N_steps =  self.N_steps
             N_outs = int(N_steps*Dt/Dt_out)
             
+            
             dt_run = np.dtype([('N_steps', 'int32'),
                                ('Dt',np.float64),
                                ('Dt_out',np.float64),
                                ('T', np.float64,(N_outs,1)),
-                               ('T_j_igbt_abcn', np.complex128,(N_outs,8)),
-                               ('T_sink', np.complex128,(N_outs,2)),
+                               ('T_j_igbt_abcn', np.complex128,(N_outs,4*len(self.params_vsc))),
+                               ('T_sink', np.complex128,(N_outs,len(self.params_vsc))),
                                ('out_cplx_i', np.complex128,(N_outs,N_nodes)),
                                ('out_cplx_v', np.complex128,(N_outs,N_nodes)),
-                               ('N_outs', 'int32')])  
+                               ('N_outs', 'int32'),
+                               ('perturbations_int', 'int32', (self.N_perturbations,1)),
+                               ('perturbations_types', 'int32', (self.N_perturbations,1)),
+                               ('perturbations_times', np.float64, (self.N_perturbations,1)),
+                               ('perturbations_cplx', np.complex128,(self.N_perturbations,4)),
+                               ])  
             
             
             params_run = np.rec.array([(N_steps,
                                         Dt,
                                         Dt_out,
                                         np.zeros((N_outs,1)), # T
-                                        np.zeros((N_outs,8)), # T_j_igbt_abcn
-                                        np.zeros((N_outs,2)), # T_sink
+                                        np.zeros((N_outs,4*len(self.params_vsc))), # T_j_igbt_abcn
+                                        np.zeros((N_outs,len(self.params_vsc))), # T_sink
                                         np.zeros((N_outs,N_nodes)),
                                         np.zeros((N_outs,N_nodes)),                                       
-                                        N_outs)],dtype=dt_run)    
+                                        N_outs,
+                                        self.perturbations_int,
+                                        self.perturbations_types,
+                                        self.perturbations_times,
+                                        self.load_new_values,                                   
+                                        )],dtype=dt_run)    
                   
             self.params_run = params_run
             
@@ -457,7 +441,7 @@ class pydss(object):
                 bus.update({'q_a':s_a.imag,
                             'q_b':s_b.imag,
                             'q_c':s_c.imag})
-        self.V = np.array(V_sorted).reshape(len(V_sorted),1)
+        self.V = np.array(V_sorted).reshape(len(V_sorted),1) 
         return self.V              
         
     def get_i(self):
@@ -597,390 +581,8 @@ class pydss(object):
         return self.bus_data
 
 
-@numba.jit(nopython=True,cache=True)
-def run_eval(params, params_pf,params_vsc,params_secondary):
-    N_steps = params[0].N_steps
-    Dt = params[0].Dt
-    Dt_out = params[0].Dt_out
-    
-    Dt_secondary = params_secondary[0].Dt_secondary    
 
-    pf_eval(params_pf)   
-     
-    for it in range(len(params_vsc)):
-               
-        params_vsc[it].v_abcn_0[:] = np.copy(params_pf[0].V_node[params_vsc[it].nodes])             
-        params_vsc[it].i_abcn_0[:] = np.copy(params_pf[0].I_node[params_vsc[it].nodes])
-        params_vsc[it].x[:] = np.zeros((4,1))
-     
-    
-    t = 0.0
-    t_out = 0.0
-    t_secondary = 0.0
-    it_out = 0
-    
-    params[0]['T'][it_out,0] = t
-    params[0].out_cplx_i[it_out,:] = params_pf[0].I_node.T
-    params[0].out_cplx_v[it_out,:] = params_pf[0].V_node.T
-    
-    for it in range(N_steps):
-
-        t += Dt
-
-        for it in range(len(params_vsc)):                
-            params_vsc[it].i_abcn[:] = params_pf[0].I_node[params_vsc[it].nodes]
-                       
-        ctrl_vsc_phasor(t,1,params_vsc,params_secondary)  
-
-        for it in range(len(params_vsc)):                
-            params_vsc[it].x[:] += Dt*params_vsc[0].f[:]       
-        
-        ctrl_vsc_phasor(t,3,params_vsc,params_secondary)  
-
-        for it in range(len(params_vsc)):             
-            params_pf[0].V_node[params_vsc[it].nodes,:] = params_vsc[it].v_abcn[:]
-        
-        pf_eval(params_pf)   
-        
-        if t>0.5: 
-            
-            params_pf[0].pq_3pn[0,:] = 0.0
-
-        if t>30.0:
-            
-            params_pf[0].pq_3pn[5,0] =  -20e3
-##            params_pf[0].pq_3pn[params_pf[0].pq_3pn_int[1,1]] = 50
-##            params_pf[0].pq_3pn[params_pf[0].pq_3pn_int[1,2]] = 50
-#            
-        if t > t_secondary+Dt_secondary:
-            V_mean = (np.sum(np.abs(params_pf[0].V_node[0:3,:]))+ np.sum(np.abs(params_pf[0].V_node[4:7,:])))/6.0 
-            params_secondary[0].V = V_mean
-            secondary_ctrl(t,1,params_secondary,params_vsc)
-            
-            params_secondary[0].x[:] += Dt_secondary*params_secondary[0].f[:]
-            secondary_ctrl(t,2,params_secondary,params_vsc)
-#            print(params_vsc.DV_remote)
-            t_secondary = t 
-             
-        if t > t_out+Dt_out:
-            it_out += 1 
-            #print(np.abs(params_vsc[0].x))
-            params[0]['T'][it_out,0] = t
-            params[0].T_sink[it_out,0] = params_vsc[0].T_sink
-            params[0].T_sink[it_out,1] = params_vsc[1].T_sink
-            params[0].T_j_igbt_abcn[it_out,0:4] = params_vsc[0].T_j_igbt_abcn.T 
-            params[0].T_j_igbt_abcn[it_out,4:8] = params_vsc[1].T_j_igbt_abcn.T 
-            params[0].out_cplx_i[it_out,:] = params_pf[0].I_node.T 
-            params[0].out_cplx_v[it_out,:] = params_pf[0].V_node.T  
-            params[0].N_outs = it_out
-            t_out = t 
-            
-    
-    
-    
-    
-#@numba.jit(nopython=True,cache=True)
-#def pf_eval(params,max_iter=20):
-#    Y_vv =  params[0].Y_vv
-#    inv_Y_ii = params[0].inv_Y_ii
-#    Y_iv =  params[0].Y_iv
-#    N_v = params[0].N_nodes_v
-#    N_i = params[0].N_nodes_i
-#    pq_3pn_int = params[0].pq_3pn_int
-#    pq_3pn     = params[0].pq_3pn
-#    V_node = params[0].V_node
-#    I_node = params[0].I_node
-#    
-#    V_unknown = np.copy(V_node[N_v:])
-#    I_known   = np.copy(I_node[N_v:])
-#    V_known   = np.copy(V_node[0:N_v])
-#    
-#    Y_vi =  Y_iv.T
-#    V_unknown_0 = V_unknown
-#    
-#    for iteration in range(max_iter):
-#
-#    
-#        for it in range(pq_3pn_int.shape[0]):
-#            
-#
-#            V_abc = V_unknown[pq_3pn_int[it][0:3],0]
-#            S_abc = pq_3pn[it,:]
-#           
-#            I_known[pq_3pn_int[it][0:3],0] = np.conj(S_abc/V_abc)
-#            I_known[pq_3pn_int[it][3],0] =  -np.sum(I_known[pq_3pn_int[it][0:3],0])
-#
-#        
-#        V_unknown = inv_Y_ii @ ( I_known - Y_iv @ V_known)
-#        
-#        if np.linalg.norm(V_unknown - V_unknown_0,np.inf) <1.0e-8: break
-#        V_unknown_0 = V_unknown
-#
-#    I_unknown =Y_vv @ V_known + Y_vi @ V_unknown
-#    
-#    V_node[0:N_v,:] = V_known 
-#    V_node[N_v:,:]  = V_unknown 
-#
-#    I_node[0:N_v,:] = I_unknown 
-#    I_node[N_v:,:]  = I_known 
-#        
-#    return V_node,I_node
-
-
-        
-spec = [
-    ('max_iter', int32), 
-    ('iterations', int32), 
-    ('N_nodes_i', int32), 
-    ('N_nodes_v', int32), 
-    ('N_nodes', int32), 
-    ('ctrl_primary_mode',int32),
-    ('ctrl_secondary_mode',int32),
-    ('V_known', complex128[:,:]), 
-    ('I_known', complex128[:,:]), 
-    ('I_known_0', complex128[:,:]), 
-    ('V_unknown', complex128[:,:]), 
-    ('I_unknown', complex128[:,:]), 
-    ('V_unknown_0', complex128[:,:]), 
-    ('V_node', complex128[:,:]), 
-    ('I_node', complex128[:,:]), 
-    ('pq_3pn_int', int64[:,:]),               # a simple scalar field    
-    ('pq_3pn', complex128[:,:]),
-    ('Y_ii', complex128[:,:]),
-    ('Y_iv', complex128[:,:]),
-    ('Y_vv', complex128[:,:]),
-    ('Y_vi', complex128[:,:]),
-    ('inv_Y_ii', complex128[:,:]),
-    ('x_0', float64[:,:]),
-    ('x', float64[:,:]),
-    ('X', float64[:,:]),
-    ('T', float64[:,:]),
-    ('out', float64[:,:]),
-    ('out_cplx', complex128[:,:])
-    ]
-
-   
-#@numba.jitclass(spec)
-class system(object):
-    
-    def __init__(self):
-        
-        # general data
-        self.N_nodes_i = 0
-        self.N_nodes_v = 0
-        self.N_nodes = 0
-        
-        # Voltages
-        self.V_known = np.zeros((0,0),dtype=np.complex128)
-        self.V_unknown = np.zeros((0,0),dtype=np.complex128)
-        self.V_unknown_0 = np.zeros((0,0),dtype=np.complex128) # initial guess
-        self.V_node = np.zeros((0,0),dtype=np.complex128) # full node Volatges
-        
-        # Currents
-        self.I_known = np.zeros((0,0),dtype=np.complex128)
-        self.I_unknown = np.zeros((0,0),dtype=np.complex128)
-        self.I_known_0 = np.zeros((0,0),dtype=np.complex128)   # initial guess
-        self.I_node = np.zeros((0,0),dtype=np.complex128) # full node Currents
-        
-        # Admitance matrices  
-        # Y = [Y_vv  Y_vi]
-        #     [Y_iv  Y_ii]
-        self.Y_vv = np.zeros((1,1),dtype=np.complex128)
-        self.Y_vi = np.zeros((1,1),dtype=np.complex128)
-        self.Y_iv = np.zeros((1,1),dtype=np.complex128)
-        self.Y_ii = np.zeros((1,1),dtype=np.complex128)
-        self.inv_Y_ii = np.zeros((1,1),dtype=np.complex128) # Y_ii inverse
-        
-        # Known powers
-        self.pq_3pn_int = np.zeros((1,1),dtype=np.int64)
-        self.pq_3pn = np.zeros((1,1),dtype=np.complex128)
-
-        # Solver paramters
-        self.max_iter = 50
-        
-        self.iterations = 0
-        
-        self.ctrl_primary_mode = 0
-        self.ctrl_secondary_mode = 2
-        
-        
-        
-        
-#        #    def pf(V_known,known_1,known_2,i_fp_modes,pq_modes,Y_vv,Y_vi,Y_iv,Y_ii,V_unknown_0):
-#    def pf_eval(self):
-#        
-#        V_known = self.V_known
-#        Y_vv = self.Y_vv
-#        Y_iv = self.Y_iv
-#        Y_vi = self.Y_vi
-#        #Y_ii = self.Y_ii
-#        inv_Y_ii = self.inv_Y_ii
-#        pq_3pn_int = self.pq_3pn_int
-#        pq_3pn = self.pq_3pn
-#
-#        V_unknown = np.copy(self.V_unknown_0)
-#        I_known = np.copy(self.I_known_0)
-#        
-#        max_iter  = self.max_iter
-#        
-#        V_unknown_0 = V_unknown
-#        for iteration in range(max_iter):
-#
-#        
-#            for it in range(pq_3pn_int.shape[0]):
-#
-#                V_abc = V_unknown[pq_3pn_int[it][0:3],0]
-#                S_abc = pq_3pn[it,:]
-#               
-#                I_known[pq_3pn_int[it][0:3],0] = np.conj(S_abc/V_abc)
-#                I_known[pq_3pn_int[it][3],0] =  -np.sum(I_known[pq_3pn_int[it][0:3],0])
-#        
-#
-#            V_unknown = inv_Y_ii @ ( I_known- Y_iv @ V_known)
-#            
-#            if np.linalg.norm(V_unknown - V_unknown_0,np.inf) <1.0e-8: break
-#            V_unknown_0 = V_unknown
-##        V_unknown = inv_Y_ii @ (I_known - Y_iv @ V_known)
-#        I_unknown =Y_vv @ V_known + Y_vi @ V_unknown
-#        
-#        self.iterations = iteration
-#        self.I_known = I_known
-#        self.V_unknown = V_unknown
-#        self.I_unknown = I_unknown
-#        
-#        self.V_node[0:self.N_nodes_v,:] = self.V_known 
-#        self.V_node[self.N_nodes_v:self.N_nodes,:] = self.V_unknown 
-#
-#        self.I_node[0:self.N_nodes_v,:] = self.I_unknown 
-#        self.I_node[self.N_nodes_v:self.N_nodes,:] = self.I_known 
-#        
-#       
-#        return self.V_node,self.I_node
-
-    def run_eval(self):
-        N_steps = 10000
-        N_states = 6
-        x = np.zeros((N_states,1))
-        f = np.zeros((N_states,1))
-        self.X = np.zeros((N_states,N_steps))
-        self.out = np.zeros((25,N_steps))
-        self.out_cplx = np.zeros((78,N_steps),np.complex128)
-        
-        self.T = np.zeros((N_steps,1))
-        ctrl1 = ctrl_vsc_phasor()
-        ctrl2 = ctrl_vsc_phasor()
-        secondary1 = secondary()
-        secondary1.V = np.zeros((6,1),np.complex128)
-        
-        V_node,I_node = pf_eval(self.Y_vv,
-        self.Y_iv,
-        self.inv_Y_ii,
-
-        self.pq_3pn_int,
-        self.pq_3pn,
-        self.N_nodes_v,
-        self.N_nodes_i
-        )
-        
-        ctrl1.v_abcn_0 = np.copy(self.V_known[0:4])
-        ctrl2.v_abcn_0 = np.copy(self.V_known[4:8])
-
-        ctrl1.i_abcn_0 = np.copy(self.I_unknown[0:4])
-        ctrl2.i_abcn_0 = np.copy(self.I_unknown[4:8])
-        
-        ctrl1.v_abcn = np.copy(ctrl1.v_abcn_0)
-        ctrl2.v_abcn = np.copy(ctrl2.v_abcn_0)
-    
-        ctrl1.mode = self.ctrl_primary_mode
-        ctrl2.mode = self.ctrl_primary_mode
-        secondary1.mode = self.ctrl_secondary_mode
-    
-        #ctrl2.Dang = 0.0
-       
-        dt = 2.0e-3
-        t = 0.0
-        t_sec = 1.0
-        self.X[:,0] = x[:,0]
-        
-        secondary1.V_ref = 240.0 
-        
-        secondary1.S_base[0]= 100.0e3
-        secondary1.S_base[1]= 100.0e3
-        
-         
-        
-        for it in range(N_steps):  
-            
-            
-            t += dt
-            
-            ctrl1.x = x[0:3]
-            ctrl2.x = x[3:6]
-            ctrl1.h_eval()
-            ctrl2.h_eval()
- 
-            self.V_known[0:4]= ctrl1.v_abcn           
-            self.V_known[4:8]= ctrl2.v_abcn
-            
-            if t>1.0:
-                self.pq_3pn[0,0] = 0.0
-                self.pq_3pn[0,1] = 0.0
-                self.pq_3pn[0,2] = 0.0
-
-            if t>10.0:
-                self.pq_3pn[3,0] = 0j
-                self.pq_3pn[3,1] = 0j
-                self.pq_3pn[3,2] = 0j
-                
-            if t>t_sec:
-
-                secondary1.S_array[0] = np.sum(ctrl1.S[:,0])
-                secondary1.S_array[1] = np.sum(ctrl2.S[:,0])
-                
-                secondary1.V[0:3,0] = self.V_known[0:3,0]
-                secondary1.V[3:6,0] = self.V_known[4:7,0]
-                secondary1.x += 1.0*secondary1.f_eval()
-                
-                secondary1.h_eval()
-                
-                ctrl1.DV_secondary = secondary1.DV_array[0]
-                ctrl2.DV_secondary = secondary1.DV_array[1]
-   
-                t_sec = t+1.0
-
-            self.V_unknown_0 = self.V_unknown
-            self.I_known_0 = self.I_known
-        
-           
-            self.pf_eval()
                     
-            
-            
-            ctrl1.i_abcn = self.I_node[0:4]
-            ctrl2.i_abcn = self.I_node[4:8]
-            
-            f[0:3] = ctrl1.f_eval() 
-            f[3:6] = ctrl2.f_eval() 
-
-            x = x + dt*f
-            
-            self.X[:,it] = x[:,0]
-            self.T[it,0] = t
-            self.out[0:4,it] = np.abs(self.I_node[0:4,0])
-            self.out[4:8,it] = np.abs(self.I_node[4:8,0])
-            self.out[8:12,it] = np.abs(self.V_node[0:4,0])
-            self.out[12:16,it] = np.abs(self.V_node[4:8,0])            
-            self.out[16:20,it] = np.angle(self.V_node[0:4,0])
-            self.out[20:24,it] = np.angle(self.V_node[4:8,0])  
-            self.out[24,it]  = self.iterations
-            
-            self.out_cplx[0:72,it]  = self.V_node[0:72,0]
-            self.out_cplx[72:75,it]  = ctrl1.S[:,0]
-            self.out_cplx[75:78,it]  = ctrl2.S[:,0]
-            
-#def run_eval():
-
-                
        
 class opendss(object):
     
@@ -1049,600 +651,7 @@ class opendss(object):
 
 
 
-#    def __init__(self):
-#               
-#
-#        self.N_states = 3
-#        self.x_0 =np.zeros((self.N_states,1))           
-#        
-#        self.x = np.copy(self.x_0)   
-#
-#        self.mode = 0
-#        self.K_v = 0.1
-#        self.K_ang = 0.0
-#        self.K_f = 0.0        
-#        
-#        self.T_v = 0.2
-#        self.T_ang = 0.2
-#        
-#        self.freq = 50.0  
-#        
-#        self.Dang = 0.0 
-#        
-#        self.v_abcn_0 =np.zeros((4,1),dtype=np.complex128)   
-#        self.i_abcn_0 =np.zeros((4,1),dtype=np.complex128)
-#        self.i_abcn =np.zeros((4,1),dtype=np.complex128)
-#        self.v_abcn =np.zeros((4,1),dtype=np.complex128)
-#        self.v_abcn_m_ref =np.zeros((4,1))
-#
-#        self.S =np.zeros((3,1),dtype=np.complex128)
-#        self.f =np.zeros((3,1),dtype=np.float64)
-#        self.h =np.zeros((4,1),dtype=np.float64)
-#        
-#        
-#        self.ctrl_design()
-#        
-#        self.DV_secondary = 0.0
-#
-#
-#        
-#    def f_eval(self):
-#        '''
-#        0: 'fix'
-#        1: 'pf_qv'
-#        2: 'pv_qf'
-#        3: 'droop_generalized'
-#        4: 'iv'
-#        5: 'nl_droop'
-#        '''
-#        if self.mode == 0: # 'fix'
-#            self.v_abcn = self.v_abcn_0
-#            V_abc = self.v_abcn[0:3]   # phase to neutral abc voltages (without neutral)
-#            I_abc = self.i_abcn[0:3,:] # phase currents (without neutral)
-#            
-#            S = V_abc*np.conj(I_abc) # phase complex power
-#            self.S = S
-#            
-#
-##        if self.mode == 2:
-##            K_v = self.K_v
-##            K_f = self.K_f
-##            
-##            V_abc_0 = self.v_abcn_0[0:3]   # phase to neutral abc voltages (without neutral)
-##            I_abc_0 = self.i_abcn_0[0:3,:] # phase currents (without neutral)
-##            
-##            S_0 = V_abc_0*np.conj(I_abc_0) # phase complex power
-##            
-##            V_abc = self.v_abcn[0:3]   # phase to neutral abc voltages (without neutral)
-##            I_abc = self.i_abcn[0:3,:] # phase currents (without neutral)
-##            
-##            S = V_abc*np.conj(I_abc) # phase complex power
-##            self.S = S
-##            
-##            DS_abc = S-S_0*0 # complex power increment
-##            
-##            DP_abc = DS_abc.real
-##            DQ_abc = DS_abc.imag
-##            
-##            K_v = 1e-10
-##            K_f = 2e-9
-##
-##            DV_m_ref =   -K_v*np.sum(DP_abc)
-##            Dfreq_ref =  -K_f*np.sum(DQ_abc)
-##            
-###            print(np.sum(DQ_abc))
-##            
-##            Dang = self.x[2:3]
-##            
-##            self.f[0:1,:] = 1.0/self.T_v*(DV_m_ref - self.x[0:1])  # voltage control dynamics
-##            self.f[1:2,:] = 1.0/self.T_ang*(Dang - self.x[1:2])  # angle control dynamics
-##            self.f[2:3,:] = 2.0*np.pi*Dfreq_ref  # angle from frequency
-##            
-##    
-#        if self.mode == 3:
-#            K_v = self.K_v
-#            K_ang = self.K_ang
-#            
-#            V_abc_0 = self.v_abcn_0[0:3]   # phase to neutral abc voltages (without neutral)
-#            I_abc_0 = self.i_abcn_0[0:3,:] # phase currents (without neutral)
-#            
-#            S_0 = V_abc_0*np.conj(I_abc_0) # phase complex power
-#            
-#            V_abc = self.v_abcn[0:3]   # phase to neutral abc voltages (without neutral)
-#            I_abc = self.i_abcn[0:3,:] # phase currents (without neutral)
-#            
-#            S = V_abc*np.conj(I_abc) # phase complex power
-#            self.S = S
-#            
-#            DS_abc = S-S_0*0 # complex power increment
-#            
-#            DP_abc = DS_abc.real
-#            DQ_abc = DS_abc.imag
-#            
-#            K_v   = 1e-6    def pf_eval(self):
-        
-#        V_unknown_0 = np.zeros((self.N_nodes_i,1),dtype=np.complex128)+231
-#        
-#        for it in range(int(self.N_nodes_i/4)): # change if not 4 wires
-#            
-#            V_unknown_0[4*it+0] = self.V_known[0]
-#            V_unknown_0[4*it+1] = self.V_known[1]
-#            V_unknown_0[4*it+2] = self.V_known[2]
-#            V_unknown_0[4*it+3] = 0.0
-#            
-#                
-#        I = np.vstack((np.zeros((self.N_nodes_v,1)),
-#                       np.zeros((self.N_nodes_i,1))))+0j
-#        V = np.vstack((self.V_known,V_unknown_0 ))
-#        V_node,I_node = pf_eval(self.Y_vv,
-#                self.Y_iv,
-#                self.inv_Y_ii,
-#                I,V,
-#                self.pq_3pn_int,
-#                self.pq_3pn,
-#                self.N_nodes_v,
-#                self.N_nodes_i
-#                )
-#
-#        self.V_node = V_node
-#        self.I_node = I_node
-##            K_ang = 1e-5
-##
-##            DV_m_ref =  -K_v*np.sum(DP_abc)
-##            Dang_ref =  K_ang*np.sum(DQ_abc)
-##            
-###            print(np.sum(DQ_abc))
-##            
-##            Dang = self.x[2:3]
-##            
-##            self.f[0:1,:] = 1.0/self.T_v*(DV_m_ref - self.x[0:1])  # voltage control dynamics
-##            self.f[1:2,:] = 1.0/self.T_ang*(Dang_ref - self.x[1:2])  # angle control dynamics
-##            self.f[2:3,:] = 0.0  # angle from frequency
-##    
-###            
-###        if self.mode == 6:
-###            K_v = self.K_v
-###            s_0 = self.v_abcn_0[0:3]*np.conj(self.i_abcn_0[0:3,:])
-###            s = self.v_abcn[0:3]*np.conj(self.i_abcn[0:3,:])
-###            Dp_abc = s.real - s_0.real
-###            Dv_abc_m_ref =  -K_v*Dp_abc
-###            self.f[0:3,:] = 1.0/self.T_v*(Dv_abc_m_ref - self.x[0:3])   
-###            
-###        if self.mode == 4:
-###            K_v = self.K_v
-###            Di_abc = np.abs(self.i_abcn[0:3,:]) - np.abs(self.i_abcn_0[0:3,:])
-###            Dv_abc_m_ref =  -K_v*Di_abc
-###            self.f[0:3,:] = 1.0/self.T_v*(Dv_abc_m_ref - self.x[0:3])            
-###            
-##        
-##        return self.f
-##
-##
-##    def h_eval(self):        
-##        '''
-##        0: 'fix'
-##        1: 'pf_qv'
-##        2: 'pv_qf'
-##        3: 'pv_qa'  # working
-##        4: 'iv'
-##        5: 'nl_droop'
-##        '''
-##        if self.mode == 0:
-##            #print(self.DV_secondary)
-##            self.v_abcn = self.v_abcn_0 *  (1+self.DV_secondary)  * np.exp(1j*self.Dang)
-##            
-###        if self.mode == 2:       
-###
-###            
-###            DV_f = self.x[0:1]  # voltage control dynamics
-###            Dang = self.x[1:2]  # angle control dynamics
-###            
-###            angles_abc = np.angle(self.v_abcn_0[0:3])
-###            module_abc = np.abs(self.v_abcn_0[0:3]) + self.x
-####            self.v_abcn[0:3] =self.v_abcn_0[0:3] * (1+self.x)
-###            
-####            print(Dang)
-###            self.v_abcn[0] =module_abc[0] * np.exp(1j*(angles_abc[0]+Dang))
-###            self.v_abcn[1] =module_abc[1] * np.exp(1j*(angles_abc[1]+Dang))
-###            self.v_abcn[2] =module_abc[2] * np.exp(1j*(angles_abc[2]+Dang))
-###            
-###            self.v_abcn[3] = 0.0
-###            
-###        if self.mode == 3: # 'pv_qa'
-###        
-###            DV_m = self.x[0:1]  # voltage control dynamics
-###            Dang = self.x[1:2]  # angle control dynamics
-###
-###            self.v_abcn[0:3] = self.v_abcn_0[0:3] * (1+DV_m+self.DV_secondary) * np.exp(1j*Dang)
-###            
-###        if self.mode == 4:
-###            angles_abc = np.angle(self.v_abcn_0[0:3])
-###            module_abc = np.abs(self.v_abcn_0[0:3]) + self.x
-###            self.v_abcn[0:3] = module_abc * np.exp(1j*angles_abc)
-###            
-###            
-###        return self.h
-##
-##    def ctrl_design(self):
-##        
-##         self.K_v = 2e-6
-#
-#
-#
-#
-#
-##spec = [
-##    ('N_states', int64),               # a simple scalar field
-##    ('mode', int32), # 0: fixed V, 1: gen droop (f), 2: nl droop
-##    ('K_v', float64),  # gain for voltage module
-##    ('K_ang', float64),  # gain for voltage angle
-##    ('K_f', float64),  # gain affecting  frequency
-##    ('T_v', float64), 
-##    ('T_ang', float64),  
-##    ('freq', float64), 
-##    ('Dang', float64),    
-##    ('DV_secondary', float64),  
-##    ('x_0', float64[:,:]),
-##    ('x', float64[:,:]), 
-##    ('f', float64[:,:]), 
-##    ('h', float64[:,:]), 
-##    ('i_abcn', complex128[:,:]),    
-##    ('v_abcn', complex128[:,:]),
-##    ('v_abcn_0', complex128[:,:]),
-##    ('i_abcn_0', complex128[:,:]),
-##    ('v_abcn_m_ref', float64[:,:]),
-##    ('S', complex128[:,:])
-##]
-##
-###@numba.jitclass(spec)
-##class ctrl_vsc_phasor(object):
-##    
-##    def __init__(self):
-##               
-##
-##        self.N_states = 3
-##        self.x_0 =np.zeros((self.N_states,1))           
-##        
-##        self.x = np.copy(self.x_0)   
-##
-##        self.mode = 0
-##        self.K_v = 0.1
-##        self.K_ang = 0.0
-##        self.K_f = 0.0        
-##        
-##        self.T_v = 0.2    def pf_eval(self):
-#        
-#        V_unknown_0 = np.zeros((self.N_nodes_i,1),dtype=np.complex128)+231
-#        
-#        for it in range(int(self.N_nodes_i/4)): # change if not 4 wires
-#            
-#            V_unknown_0[4*it+0] = self.V_known[0]
-#            V_unknown_0[4*it+1] = self.V_known[1]
-#            V_unknown_0[4*it+2] = self.V_known[2]
-#            V_unknown_0[4*it+3] = 0.0
-#            
-#                
-#        I = np.vstack((np.zeros((self.N_nodes_v,1)),
-#                       np.zeros((self.N_nodes_i,1))))+0j
-#        V = np.vstack((self.V_known,V_unknown_0 ))
-#        V_node,I_node = pf_eval(self.Y_vv,
-#                self.Y_iv,
-#                self.inv_Y_ii,
-#                I,V,
-#                self.pq_3pn_int,
-#                self.pq_3pn,
-#                self.N_nodes_v,
-#                self.N_nodes_i
-#                )
-#
-#        self.V_node = V_node
-#        self.I_node = I_node
-##        self.T_ang = 0.2
-##        
-##        self.freq = 50.0  
-##        
-##        self.Dang = 0.0 
-##        
-##        self.v_abcn_0 =np.zeros((4,1),dtype=np.complex128)   
-##        self.i_abcn_0 =np.zeros((4,1),dtype=np.complex128)
-##        self.i_abcn =np.zeros((4,1),dtype=np.complex128)
-##        self.v_abcn =np.zeros((4,1),dtype=np.complex128)
-##        self.v_abcn_m_ref =np.zeros((4,1))
-##
-##        self.S =np.zeros((3,1),dtype=np.complex128)
-##        self.f =np.zeros((3,1),dtype=np.float64)
-##        self.h =np.zeros((4,1),dtype=np.float64)
-##        
-##        
-##        self.ctrl_design()
-##        
-##        self.DV_secondary = 0.0
-##
-##
-##        
-##    def f_eval(self):
-##        '''
-##        0: 'fix'
-##        1: 'pf_qv'
-##        2: 'pv_qf'
-##        3: 'droop_generalized'
-##        4: 'iv'
-##        5: 'nl_droop'
-##        '''
-##        if self.mode == 0: # 'fix'
-##            self.v_abcn = self.v_abcn_0
-##            V_abc = self.v_abcn[0:3]   # phase to neutral abc voltages (without neutral)
-##            I_abc = self.i_abcn[0:3,:] # phase currents (without neutral)
-##            
-##            S = V_abc*np.conj(I_abc) # phase complex power
-##            self.S = S
-##            
-##
-###        if self.mode == 2:
-###            K_v = self.K_v
-###            K_f = self.K_f
-###            
-###            V_abc_0 = self.v_abcn_0[0:3]   # phase to neutral abc voltages (without neutral)
-###            I_abc_0 = self.i_abcn_0[0:3,:] # phase currents (without neutral)
-###            
-###            S_0 = V_abc_0*np.conj(I_abc_0) # phase complex power
-###            
-###            V_abc = self.v_abcn[0:3]   # phase to neutral abc voltages (without neutral)
-###            I_abc = self.i_abcn[0:3,:] # phase currents (without neutral)
-###            
-###            S = V_abc*np.conj(I_abc) # phase complex power
-###            self.S = S
-###            
-###            DS_abc = S-S_0*0 # complex power increment
-###            
-###            DP_abc = DS_abc.real
-###            DQ_abc = DS_abc.imag
-###            
-###            K_v = 1e-10
-###            K_f = 2e-9
-###
-###            DV_m_ref =   -K_v*np.sum(DP_abc)
-###            Dfreq_ref =  -K_f*np.sum(DQ_abc)
-###            
-####            print(np.sum(DQ_abc))
-###            
-###            Dang = self.x[2:3]
-###            
-###            self.f[0:1,:] = 1.0/self.T_v*(DV_m_ref - self.x[0:1])  # voltage control dynamics
-###            self.f[1:2,:] = 1.0/self.T_ang*(Dang - self.x[1:2])  # angle control dynamics
-###            self.f[2:3,:] = 2.0*np.pi*Dfreq_ref  # angle from frequency
-###            
-###    
-##        if self.mode == 3:
-##            K_v = self.K_v
-##            K_ang = self.K_ang
-##            
-##            V_abc_0 = self.v_abcn_0[0:3]   # phase to neutral abc voltages (without neutral)
-##            I_abc_0 = self.i_abcn_0[0:3,:] # phase currents (without neutral)
-##            
-##            S_0 = V_abc_0*np.conj(I_abc_0) # phase complex power
-##            
-##            V_abc = self.v_abcn[0:3]   # phase to neutral abc voltages (without neutral)
-##            I_abc = self.i_abcn[0:3,:] # phase currents (without neutral)
-##            
-##            S = V_abc*np.conj(I_abc) # phase complex power
-##            self.S = S
-##            
-##            DS_abc = S-S_0*0 # complex power increment
-##            
-##            DP_abc = DS_abc.real
-##            DQ_abc = DS_abc.imag
-##            
-##            K_v   = 1e-6
-##            K_ang = 1e-5
-##
-##            DV_m_ref =  -K_v*np.sum(DP_abc)
-##            Dang_ref =  K_ang*np.sum(DQ_abc)
-##            
-###            print(np.sum(DQ_abc))
-##            
-##            Dang = self.x[2:3]
-##            
-##            self.f[0:1,:] = 1.0/self.T_v*(DV_m_ref - self.x[0:1])  # voltage control dynamics
-##            self.f[1:2,:] = 1.0/self.T_ang*(Dang_ref - self.x[1:2])  # angle control dynamics
-##            self.f[2:3,:] = 0.0  # angle from frequency
-##    
-###            
-###        if self.mode == 6:
-###            K_v = self.K_v
-###            s_0 = self.v_abcn_0[0:3]*np.conj(self.i_abcn_0[0:3,:])
-###            s = self.v_abcn[0:3]*np.conj(self.i_abcn[0:3,:])
-###            Dp_abc = s.real - s_0.real
-###            Dv_abc_m_ref =  -K_v*Dp_abc
-###            self.f[0:3,:] = 1.0/self.T_v*(Dv_abc_m_ref - self.x[0:3])   
-###            
-###        if self.mode == 4:
-###            K_v = self.K_v
-###            Di_abc = np.abs(self.i_abcn[0:3,:]) - np.abs(self.i_abcn_0[0:3,:])
-###            Dv_abc_m_ref =  -K_v*Di_abc
-###            self.f[0:3,:] = 1.0/self.T_v*(Dv_abc_m_ref - self.x[0:3])            
-###            
-##        
-##        return self.f
-##
-##
-##    def h_eval(self):        
-##        '''
-##        0: 'fix'
-##        1: 'pf_qv'
-##        2: 'pv_qf'
-##        3: 'pv_qa'  # working
-##        4: 'iv'
-##        5: 'nl_droop'
-##        '''
-##        if self.mode == 0:
-##            #print(self.DV_secondary)
-##            self.v_abcn = self.v_abcn_0 *  (1+self.DV_secondary)  * np.exp(1j*self.Dang)
-##            
-###        if self.mode == 2:       
-###
-###            
-###            DV_f = self.x[0:1]  # voltage control dynamics
-###            Dang = self.x[1:2]  # angle control dynamics
-###            
-###            angles_abc = np.angle(self.v_abcn_0[0:3])
-###            module_abc = np.abs(self.v_abcn_0[0:3]) + self.x
-####            self.v_abcn[0:3] =self.v_abcn_0[0:3] * (1+self.x)
-###            
-####            print(Dang)
-###            self.v_abcn[0] =module_abc[0] * np.exp(1j*(angles_abc[0]+Dang))
-###            self.v_abcn[1] =module_abc[1] * np.exp(1j*(angles_abc[1]+Dang))
-###            self.v_abcn[2] =module_abc[2] * np.exp(1j*(angles_abc[2]+Dang))
-###            
-###            self.v_abcn[3] = 0.0
-###            
-###        if self.mode == 3: # 'pv_qa'
-###        
-###            DV_m = self.x[0:1]  # voltage control dynamics
-###            Dang = self.x[1:2]  # angle control dynamics
-###
-###            self.v_abcn[0:3] = self.v_abcn_0[0:3] * (1+DV_m+self.DV_secondary) * np.exp(1j*Dang)
-###            
-###        if self.mode == 4:
-###            angles_abc = np.angle(self.v_abcn_0[0:3])
-###            module_abc = np.abs(self.v_abcn_0[0:3]) + self.x
-###            self.v_abcn[0:3] = module_abc * np.exp(1j*angles_abc)
-###            
-###            
-###        return self.h
-##
-##    def ctrl_design(self):
-##        
-##         self.K_v = 2e-6
 
-
-#spec = [
-#    ('N_states', int64),               # a simple scalar field
-#    ('x_0', float64[:,:]),
-#    ('x', float64[:,:]), 
-#    ('f', float64[:,:]), 
-#    ('h', float64[:,:]), 
-#    ('mode', int32), # 0: fixed V, 1: gen droop (f), 2: nl droop
-#    ('K_p_v', float64),  # gain for voltage module
-#    ('K_i_v', float64),  # gain for voltage angle
-#    ('V_ref', float64),  # gain affecting  frequency
-#    ('V_0', complex128[:,:]),
-#    ('V', complex128[:,:]),
-#    ('DV', float64),
-#    ('DV_array', float64[:,:]),
-#    ('S_array', complex128[:,:]),
-#    ('S_base', float64[:,:])
-#]
-#
-##@numba.jitclass(spec)
-#class secondary(object):
-#    
-#    def __init__(self):
-#               
-#
-#        self.N_states = 2
-#        self.x_0 =np.zeros((self.N_states,1))   
-#        self.f = np.zeros((self.N_states,1))          
-#        self.h = np.zeros((self.N_states,1)) 
-#        
-#        self.x = np.copy(self.x_0)
-#
-#        self.mode = 0
-#        self.K_p_v = 0.0001
-#        self.K_i_v = 0.001
-#        
-#        self.V_0 =np.zeros((4,1),dtype=np.complex128)   
-#        self.V =np.zeros((4,1),dtype=np.complex128)   
-#        
-#        self.V_ref = 231.0
-#        self.DV = 0.0
-#        
-#        self.S_base = np.zeros((2,1))
-#        self.S_array = np.zeros((2,1),dtype=np.complex128) 
-#        self.DV_array = np.zeros((2,1))
-#        
-#    def f_eval(self):
-#        '''
-#        0: 'fix'
-#        1: 'v'
-#        2:  
-#        3:  
-#        4:  
-#        5:  
-#        '''
-#        if self.mode == 0: # 'fix'
-#            self.DV = 0.0 
-#            
-#
-#        if self.mode == 1:  # 'v'
-#
-#            V_mean = np.mean(np.abs(self.V))
-#            error =  self.V_ref - V_mean
-#            self.f[0] = error
-#            
-#        if self.mode == 2:  # 'p'
-#            S_total = np.sum(self.S_base)
-#            P_demand_est = np.sum(self.S_array.real)    
-#            for it in range(2):
-#                P_ref = P_demand_est * self.S_base[it]/S_total
-#                DP = P_ref - self.S_array[it].real
-#                   
-#                error =  DP
-#                if error> 10e3:
-#                    error = 10e3
-#                if error< -10e3:
-#                    error = -10e3                    
-#                self.f[it] = error                          
-#
-#
-#        return self.f
-#
-#
-#    def h_eval(self):        
-#        '''
-#        0: 'fix'
-#        1: 'pf_qv'
-#        2: 'pv_qf'
-#        3: 'pv_qa'
-#        4: 'iv'
-#        5: 'nl_droop'
-#        '''
-#        if self.mode == 0:
-#            self.DV = 0.0
-#            
-#        if self.mode == 1:  # 'v'
-#            K_p_v = self.K_p_v
-#            K_i_v = self.K_i_v
-#            
-#            V_mean = np.mean(np.abs(self.V))
-#            error =  231.0 - V_mean
-#            
-#            self.DV = K_p_v*error + K_i_v * self.x[0,0]
-#                        
-#            self.h[0] = self.DV
-#
-#        if self.mode == 2:  # 'p'
-#            S_total = np.sum(self.S_base)
-#            P_demand_est = np.sum(self.S_array.real)    
-#            for it in range(2):
-#                P_ref = P_demand_est * self.S_base[it]/S_total
-#                DP = P_ref - self.S_array[it].real
-#                DV = DP*0.000000002 + 0.00000005* self.x[it,0]
-#                if DV >10.0:
-#                    DV =10.0
-#                    self.f[it] = 0.0
-#                if DV < -10.0:
-#                    DV = -10.0
-#                    self.f[it] = 0.0
-#                    
-#                self.DV_array[it] = DV
-#            
-#                
-#        return self.h
-#
-#    def ctrl_design(self):
-#        
-#         self.K_v = 2e-6
 
 
 
@@ -1660,61 +669,10 @@ spec = [('value', float64[:,:]),
                  ('cplx_value_11', complex128[:,:]),
                  ('cplx_value_12', complex128[:,:])                 
                  ]
-
-#@numba.jitclass(spec)
-class Car(object):
-
-    def __init__(self):
-        self.value = np.zeros((2000,1))
-        h1 = House()
-        #self.cplx_value_1 = np.zeros((2000,1),dtype=np.complex128)
-        
-    #@property
-    def twice(self):
-        return  np.abs(self.cplx_value_1 )
-    
-    def twice1(self):
-        return  np.abs(self.cplx_value_1 )
-
-    def twice2(self):
-        return  np.abs(self.cplx_value_1 )
-    
-spec = [('value', float64[:,:]),
-                 ('cplx_value_1', complex128[:,:]),
-                 ('cplx_value_2', complex128[:,:]),
-                 ('cplx_value_3', complex128[:,:]),
-                 ('cplx_value_4', complex128[:,:]),
-                 ('cplx_value_5', complex128[:,:]),
-                 ('cplx_value_6', complex128[:,:]),
-                 ('cplx_value_7', complex128[:,:]),
-                 ('cplx_value_8', complex128[:,:]),
-                 ('cplx_value_9', complex128[:,:]),
-                 ('cplx_value_10', complex128[:,:]),
-                 ('cplx_value_11', complex128[:,:]),
-                 ('cplx_value_12', complex128[:,:])                 
-                 ]
-
-@numba.jitclass(spec)
-class House(object):
-
-    def __init__(self):
-        self.value = np.zeros((2000,1))
-        #self.cplx_value_1 = np.zeros((2000,1),dtype=np.complex128)
-        
-    #@property
-    def twice(self):
-        return  np.abs(self.cplx_value_1 )
-    
-    def twice1(self):
-        return  np.abs(self.cplx_value_1 )
-
-    def twice2(self):
-        return  np.abs(self.cplx_value_1 )
-    
     
     
 if __name__ == "__main__":
-    import time
+    import time 
     
 #    t0 = time.time()
 #    sys1 = system()
@@ -1725,10 +683,16 @@ if __name__ == "__main__":
 #    print('time: {:f}'.format(time.time()-t0))
     
     t0 = time.time()
+#    sys1 = pydss('cigre_lv_isolated_3gformers.json')
+#    sys1 = pydss('thermal_test.json')
     sys1 = pydss('cigre_lv_isolated.json')
     sys1.pf_eval()
     sys1.run_eval()
-    print('time: {:f}'.format(time.time()-t0))
+#    print('time: {:f}'.format(time.time()-t0))
+
+
+
+
 
 #    t0 = time.time()
 #    sys1 = pydss('cigre_lv_isolated.json')

@@ -1,0 +1,23 @@
+{
+"buses":[
+		{"bus": "R1",  "Vbase":0.231, "pos_x": 0, "pos_y":   0, "units": "m"}
+		],
+"v_sources":[
+         {"bus": "R2", "bus_nodes": [1, 2, 3, 4], "deg": [-30, -150, -270, 0], "kV": [0.23094, 0.23094, 0.23094, 0]}
+		],
+"vsc":[  {"ctrl_mode":3, 'pwm_mode':0, "filter_type":0, "s_n_kVA":100.0, "V_dc":800.0, 
+          "L_1":0.5e-3, "R_1":0.2, "L_2":0.5e-3, "R_2":0.2, "C_ac":10.0e-6, 
+          "T_d_idq":0.01, "T_d_vdc":0.005, 
+          "C_dc":2200e-6,
+           "a_i":1.5257e+01, "b_i":-2.7435e-02, "c_i":9.5767e-03, "d_i":7.8929e-03, "e_i":4.0265e-03, 
+           "a_d":6.2857e-01, "b_d":1.0374e-01, "c_d":-1.2941e-01, "d_d":3.0008e-03, "e_d":-1.3320e-03,
+           "Rth_sink":0.0129, "Rth_c_igbt":0.02, "Rth_c_diode":0.05, "Rth_j_igbt":0.15, "Rth_j_diode":0.15,"T_a":25.0, 
+           "Cth_sink":6.9767, "N_switch_sink":6,
+           "eta_d":0.0, "eta_q":0.92,
+           "Dt_ps":50.0e-6,"Dt_ctrl":50.0e-6}
+	  ],
+"perturbations":[
+        {"type":"load_new_value", "time":20.5, "bus":"R18", "kw_abc":[10,10,10], "kvar_abc":[6,6,6] },
+        {"type":"load_new_value", "time":30.5, "bus":"R1", "kw_abc":[0,0,0], "kvar_abc":[-60,-60,-60] }
+        ]
+}
