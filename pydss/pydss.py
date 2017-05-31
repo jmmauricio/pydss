@@ -239,13 +239,13 @@ class pydss(object):
         self.V_known = V_known
         self.Y_lines = Y_lines
         
-
+        self.I_node = np.vstack((np.zeros((self.N_nodes_v,1)),
+                                 np.zeros((self.N_nodes_i,1))))+0j
         
     def pf(self):
         
         V_unknown_0 = np.zeros((self.N_nodes_i,1),dtype=np.complex128)+231 
-        self.I_node = np.vstack((np.zeros((self.N_nodes_v,1)),
-                             np.zeros((self.N_nodes_i,1))))+0j
+
         self.V_node = np.vstack((self.V_known,V_unknown_0 ))
         
         for it in range(int(self.N_nodes_i/4)): # change if not 4 wires

@@ -11,6 +11,10 @@ import numba
 
 @numba.jit(nopython=True,cache=True)
 def pf_eval(params,max_iter=20):
+    '''
+    
+    
+    '''
     Y_vv =  params[0].Y_vv
     inv_Y_ii = params[0].inv_Y_ii
     Y_iv =  params[0].Y_iv
