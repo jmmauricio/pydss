@@ -9,7 +9,7 @@ Created on Mon Mar 27 11:41:44 2017
 import numpy as np
 import numba
 
-@numba.jit(nopython=True,cache=True)
+#@numba.jit(nopython=True) #,cache=True)
 def pf_eval(params,max_iter=20):
     '''
     
@@ -22,6 +22,8 @@ def pf_eval(params,max_iter=20):
     N_i = params[0].N_nodes_i
     pq_3pn_int = params[0].pq_3pn_int
     pq_3pn     = params[0].pq_3pn
+    pq_3p_int = params[0].pq_3p_int
+    pq_3p     = params[0].pq_3p
     V_node = params[0].V_node
     I_node = params[0].I_node
     
@@ -32,16 +34,25 @@ def pf_eval(params,max_iter=20):
     Y_vi =  Y_iv.T
     V_unknown_0 = V_unknown
     
+    #print(np.abs(V_unknown))
     for iteration in range(max_iter):
 
         for it in range(pq_3pn_int.shape[0]):
-            
+           
             V_abc = V_unknown[pq_3pn_int[it][0:3],0]
             S_abc = pq_3pn[it,:]
            
             I_known[pq_3pn_int[it][0:3],0] = np.conj(S_abc/V_abc)
             I_known[pq_3pn_int[it][3],0] =  -np.sum(I_known[pq_3pn_int[it][0:3],0])
-        
+
+        for it in range(pq_3p_int.shape[0]):
+            
+            V_abc = V_unknown[pq_3p_int[it][0:3],0]
+            S_abc = pq_3p[it,:]
+           
+            I_known[pq_3p_int[it],0] = np.conj(S_abc/V_abc)
+            #I_known[pq_3p_int[it][0],0] =  -np.sum(I_known[pq_3p_int[it][0:3],0])
+
         V_unknown = inv_Y_ii @ ( I_known - Y_iv @ V_known)
         
         if np.linalg.norm(V_unknown - V_unknown_0,np.inf) <1.0e-8: break
