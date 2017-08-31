@@ -12,10 +12,13 @@ from numba import float64,int32,int64,complex128
 import json
 import re
 import time
-from pf import pf_eval
+from pf import pf_eval,set_load_factor
 from run import run_eval
 from electric import vsc,vsc_former
 from ctrl import secondary
+import time
+from scipy import sparse
+from scipy.sparse import linalg as sla
 
 line_codes = {'OH1':[[0.540 + 0.777j, 0.049 + 0.505j, 0.049 + 0.462j, 0.049 + 0.436j],
                       [0.049 + 0.505j, 0.540 + 0.777j, 0.049 + 0.505j, 0.049 + 0.462j],
@@ -62,6 +65,7 @@ line_codes = {'OH1':[[0.540 + 0.777j, 0.049 + 0.505j, 0.049 + 0.462j, 0.049 + 0.
                        [ 0.33025232+0.35874501j,  0.32098424+0.39046333j,1.15225232+0.45874501j]]                       
               }
 
+
 class pydss(object):
     '''
     
@@ -74,8 +78,11 @@ class pydss(object):
     '''
     
     
-    def __init__(self,json_file):
-        
+    def __init__(self):
+        self.a = 0
+
+
+    def read(self,json_file):        
         self.json_file = json_file
         self.json_data = open(json_file).read().replace("'",'"')
         data = json.loads(self.json_data)
@@ -92,6 +99,7 @@ class pydss(object):
         
         transformers = data['transformers']
         lines = data['lines']
+        line_codes_data = data['line_codes']
         loads = data['loads']
         v_sources = data['v_sources']
         buses = data['buses']
@@ -107,8 +115,9 @@ class pydss(object):
         it_col = 0
         v_sources_nodes = []
 
-        
+        node_sorter = []
         N_v_known = 0
+        N_nz_nodes = 0  # number on non zero current nodes
         ## Known voltages
         V_known_list = []
         for v_source in v_sources:
@@ -127,15 +136,19 @@ class pydss(object):
         V_known = np.array(V_known_list).reshape(len(V_known_list),1) # known voltages list numpy array
         self.v_sources_nodes = v_sources_nodes
 
+        N_nz_nodes += N_v_known
+        
         ## Known currents
         S_known_list = []
         pq_3pn_int_list = []
         pq_3pn_list = []
         pq_3p_int_list = []
         pq_3p_list = []
-        pq_pn_int_list = []
-        pq_pn_list = []
+        pq_1p_int_list = []
+        pq_1p_list = []
         it_node_i = 0
+        
+        t_0 = time.time()
         for load in loads:
             if not 'bus_nodes' in load:   # if nodes are not declared, default nodes are created
                 if load['type']=='3P':
@@ -158,9 +171,7 @@ class pydss(object):
                         for s,fp in zip(load['kVA'],load['fp']):                            
                             pq += [-1000.0*s*np.exp(1j*np.arccos(fp)*np.sign(fp))]
                         pq_3pn_list += [pq]
-
-                        
-                        
+                                               
             if load['type'] == '3P':
                 pq_3p_int_list += [list(it_node_i + np.array([0,1,2]))]
                 it_node_i += 3
@@ -168,21 +179,28 @@ class pydss(object):
                     if type(load['kVA']) == float:
                         pq_3p_list += [[-1000.0*load['kVA']*np.exp(1j*np.arccos(load['fp'])*np.sign(load['fp']))/3]]
 
-#            if load['type'] == 'P+N':
-#                p_node = load['bus_nodes']
-#                pq_pn_int_list += [list(it_node_i + np.array([0,1,2,3]))]
-#                it_node_i += 4
-#                if 'kVA' in load:
-#                    if type(load['kVA']) == float:
-#                        pq_3p_list += [[1000.0*load['kVA']*np.exp(1j*np.arccos(load['fp'])*np.sign(load['fp']))]]
-#                        
-                        
+            if load['type'] == '1P':
+                pq_1p_int_list += [[it_node_i ]]
+                it_node_i += 1
+                if 'kVA' in load:
+                    S_va = -1000.0*load['kVA']
+                    phi = np.arccos(load['fp'])
+                    pq_1p_list += [[S_va*np.exp(1j*phi*np.sign(load['fp']))]]
+                if 'kW' in load:
+                    S_va = -1000.0*load['kW']/load['fp']
+                    phi = np.arccos(load['fp'])
+                    pq_1p_list += [[S_va*np.exp(1j*phi*np.sign(load['fp']))]]
+    
+
+        N_nz_nodes += it_node_i                               
 #            for kVA,fp in  zip(load['kVA'],load['fp']): # known complex power list 
 #                S_known_list += [1000.0*kVA*np.exp(1j*np.arccos(fp)*np.sign(fp))]
         pq_3pn_int = np.array(pq_3pn_int_list) # known complex power list to numpy array
         pq_3pn = np.array(pq_3pn_list) # known complex power list to numpy array
         pq_3p_int = np.array(pq_3p_int_list) # known complex power list to numpy array
         pq_3p = np.array(pq_3p_list) # known complex power list to numpy array
+        pq_1p_int = np.array(pq_1p_int_list) # known complex power list to numpy array
+        pq_1p = np.array(pq_1p_list) # known complex power list to numpy array
 
         for trafo in transformers:
             if trafo['connection'] == 'Dyn11':
@@ -207,8 +225,17 @@ class pydss(object):
             for item in  trafo['bus_k_nodes']: # the list of nodes '[<bus>.<node>.<node>...]' is created 
                 node_k = '{:s}.{:s}'.format(trafo['bus_k'], str(item))
                 if not node_k in nodes: nodes +=[node_k]
+
+        print('trafos',time.time()-t_0) 
+        t_0 = time.time()
                 
         for line in lines:
+            line_code = line['code']
+            if not line_code in line:
+                R = np.array(data['line_codes'][line_code]['R'])
+                X = np.array(data['line_codes'][line_code]['X'])
+                Z = R + 1j*X
+                line_codes.update({line_code:Z.tolist()})
             N_conductors = len(line_codes[line['code']])
             A_n_cols += N_conductors
             if not 'bus_j_nodes' in line:   # if nodes are not declared, default nodes are created
@@ -226,7 +253,11 @@ class pydss(object):
         N_nodes = len(nodes)
 
         A = np.zeros((N_nodes,A_n_cols))
-
+        A_sp = sparse.lil_matrix((N_nodes, A_n_cols), dtype=np.float32)
+        
+        print('lines',time.time()-t_0) 
+        t_0 = time.time()
+        
         it_col = 0
         Y_trafos_prims =  []
         for trafo in transformers:
@@ -243,42 +274,74 @@ class pydss(object):
                 node_j = '{:s}.{:s}'.format(trafo['bus_j'], str(item))
                 row = nodes.index(node_j)
                 col = it_col
+                A_sp[row,col] = 1
                 A[row,col] = 1
-                it_col +=1   
+                it_col +=1  
     
             for item in  trafo['bus_k_nodes']: # the list of nodes '[<bus>.<node>.<node>...]' is created 
                 node_k = '{:s}.{:s}'.format(trafo['bus_k'], str(item))
                 row = nodes.index(node_k)
                 col = it_col
+                A_sp[row,col] = 1
                 A[row,col] = 1
-                it_col +=1   
-        
+                it_col +=1 
+ 
+        print('trafos2',time.time()-t_0) 
+        t_0 = time.time()
+       
         Z_line_list =  []
         for line in lines:
             for item in  line['bus_j_nodes']: # the list of nodes '[<bus>.<node>.<node>...]' is created 
                 node_j = '{:s}.{:s}'.format(line['bus_j'], str(item))
                 row = nodes.index(node_j)
                 col = it_col
+                A_sp[row,col] = 1
                 A[row,col] = 1
+                #it_col +=1   
     
             #for item in  line['bus_k_nodes']: # the list of nodes '[<bus>.<node>.<node>...]' is created 
                 node_k = '{:s}.{:s}'.format(line['bus_k'], str(item))
                 row = nodes.index(node_k)
                 col = it_col
+                A_sp[row,col] = -1
                 A[row,col] = -1
                 it_col +=1   
+
             Z_line_list += [line['m']*0.001*np.array(line_codes[line['code']])]   # Line code to list of Z lines
 
         Y_trafos_primitive = diag_2d(Y_trafos_prims)
         Y_lines_primitive = diag_2d_inv(Z_line_list)
+        print('lines 2',time.time()-t_0) 
+        t_0 = time.time()
+        
         N_trafos_len = Y_trafos_primitive.shape[0]
         N_lines_len  = Y_lines_primitive.shape[0]
-        Y_primitive = np.vstack((np.hstack((Y_trafos_primitive,np.zeros((N_trafos_len,N_lines_len)))),
-                                 np.hstack((np.zeros((N_lines_len,N_trafos_len)),Y_lines_primitive))))
+        N_prim = N_trafos_len + N_lines_len
+#        Y_primitive = np.vstack((np.hstack((Y_trafos_primitive,np.zeros((N_trafos_len,N_lines_len)))),
+#                                 np.hstack((np.zeros((N_lines_len,N_trafos_len)),Y_lines_primitive))))
         
+        Y_trafos_primitive = diag_2dsparse(Y_trafos_prims)
+        Y_lines_primitive = diag_2dsparse_inv(Z_line_list)
+        print('diag_2dsparse',time.time()-t_0) 
+        t_0 = time.time()
+        
+        Y_primitive_sp = sparse.csc_matrix((N_prim,N_prim),dtype=np.complex128)
+        print('sparse.lil_matrix',time.time()-t_0) 
+        t_0 = time.time()
+        
+        Y_primitive_sp[N_trafos_len:N_prim,N_trafos_len:N_prim] = Y_lines_primitive     
+        print('Y_lines_primitive -> Y_primitive_sp',time.time()-t_0) 
+        t_0 = time.time()
+        
+        Y_primitive_sp[0:N_trafos_len,0:N_trafos_len] = Y_trafos_primitive
+        print('Y_trafos_primitive -> Y_primitive_sp',time.time()-t_0) 
+        t_0 = time.time()
+
+#        = np.vstack((np.hstack((Y_trafos_primitive,np.zeros((N_trafos_len,N_lines_len)))),
+#                                   np.hstack((np.zeros((N_lines_len,N_trafos_len)),Y_lines_primitive))))  
         A_v = A[0:N_v_known,:]   
         N_nodes_i = N_nodes-N_v_known
-        A_i = A[N_v_known:(N_v_known+N_nodes_i),:] 
+        A_i = A_sp[N_v_known:(N_v_known+N_nodes_i),:] 
 
         self.A = A
         self.nodes = nodes
@@ -287,24 +350,53 @@ class pydss(object):
         self.N_nodes_v = self.N_nodes  - N_nodes_i
         self.A_v = A_v
         self.A_i = A_i
-        
-        self.Y = A @ Y_primitive @ A.T
-        self.Y_primitive = Y_primitive
-        self.Y_ii = A_i @ Y_primitive @ A_i.T
-        self.Y_iv = A_i @ Y_primitive @ A_v.T
-        self.Y_vv = A_v @ Y_primitive @ A_v.T
-        self.Y_vi = A_v @ Y_primitive @ A_i.T
 
-        self.inv_Y_ii = np.linalg.inv(self.Y_ii +1.0e-6 )
+        
+#        self.Y = A.T @ Y_primitive @ A
+        self.Y = A_sp.T @ Y_primitive_sp @ A_sp        
+        self.Y_primitive = Y_primitive_sp.toarray()
+        self.Y_ii = A_i @ Y_primitive_sp @ A_i.T
+        self.Y_iv = A_i @ Y_primitive_sp @ A_v.T
+        self.Y_vv = A_v @ Y_primitive_sp @ A_v.T
+        self.Y_vi = A_v @ Y_primitive_sp @ A_i.T
+
+        print('Ys calc',time.time()-t_0) 
+        t_0 = time.time()
+        
+        #self.inv_Y_ii = sparse.linalg.inv()
+        self.inv_Y_ii = inv_splu(sparse.csc_matrix(self.Y_ii))        
+        print('inv_Y_ii',time.time()-t_0) 
+        t_0 = time.time()
+        
         self.pq_3pn_int = pq_3pn_int
         self.pq_3pn = pq_3pn
         self.pq_3p_int = pq_3p_int
         self.pq_3p = pq_3p
+        self.pq_1p_int = pq_1p_int
+        self.pq_1p = pq_1p
         self.nodes = nodes
         self.V_known = V_known
         
         self.I_node = np.vstack((np.zeros((self.N_nodes_v,1)),
                                  np.zeros((self.N_nodes_i,1))))+0j
+
+        self.A_n_cols = A_n_cols
+        self.Y_primitive_sp = Y_primitive_sp
+        self.A_sp = A_sp
+        
+        self.N_nz_nodes = N_nz_nodes
+ 
+        node_sorter = []
+        for bus in self.buses:
+            N_nodes = 0
+            for node in range(10):
+                bus_node = '{:s}.{:s}'.format(str(bus['bus']),str(node))
+                if bus_node in self.nodes:
+                    node_idx = self.nodes.index(bus_node) 
+                    node_sorter += [node_idx]
+                    N_nodes += 1
+                bus.update({'N_nodes':N_nodes})
+        self.node_sorter = node_sorter
         
     def pf(self):
         
@@ -348,28 +440,60 @@ class pydss(object):
             self.pq_3pn_int = np.array([[0,0,0,0]])
             self.pq_3pn = np.array([[0,0,0]])
             
+        if self.pq_3p_int.shape[0] == 0:
+            self.pq_3p_int = np.array([[0,0,0]])
+            self.pq_3p = np.array([[0,0,0]])
+            
+        if self.pq_1p_int.shape[0] == 0:
+            self.pq_1p_int = np.array([[0]])
+            self.pq_1p = np.array([[0]])
             
         dt_pf = np.dtype([
-                  ('Y_vv',np.complex128,(N_v,N_v)),('Y_iv',np.complex128,(N_i,N_v)),('inv_Y_ii',np.complex128,(N_i,N_i)),
+                  ('Y_vv',np.complex128,(N_v,N_v)),('Y_iv',np.complex128,(N_i,N_v)),
+                  ('inv_Y_ii',np.complex128,(N_i,N_i)),('Y_ii',np.complex128,(N_i,N_i)),
                   ('I_node',np.complex128,(N_v+N_i,1)),('V_node',np.complex128,(N_v+N_i,1)),
-                  ('pq_3p_int',np.int32,self.pq_3p_int.shape),('pq_3p',np.complex128,self.pq_3p.shape),
-                  ('pq_3pn_int',np.int32,self.pq_3pn_int.shape),('pq_3pn',np.complex128,self.pq_3pn.shape),
-                  ('N_nodes_v',np.int32),('N_nodes_i',np.int32)] )
+                  ('pq_1p_int',np.int32,self.pq_1p_int.shape),('pq_1p',np.complex128,self.pq_1p.shape),('pq_1p_0',np.complex128,self.pq_1p.shape),
+                  ('pq_3p_int',np.int32,self.pq_3p_int.shape),('pq_3p',np.complex128,self.pq_3p.shape),('pq_3p_0',np.complex128,self.pq_3p.shape),
+                  ('pq_3pn_int',np.int32,self.pq_3pn_int.shape),('pq_3pn',np.complex128,self.pq_3pn.shape),('pq_3pn_0',np.complex128,self.pq_3pn.shape),
+                  ('N_nodes_v',np.int32),('N_nodes_i',np.int32),('iters',np.int32),('N_nz_nodes',np.int32)] )
     
 
         params_pf = np.rec.array([(
-                                self.Y_vv,self.Y_iv,self.inv_Y_ii,
+                                self.Y_vv,self.Y_iv,
+                                self.inv_Y_ii,self.Y_ii.toarray(), 
                                 self.I_node,self.V_node,
-                                self.pq_3p_int,self.pq_3p,
-                                self.pq_3pn_int,self.pq_3pn,
-                                self.N_nodes_v,self.N_nodes_i)],dtype=dt_pf)  
+                                self.pq_1p_int,self.pq_1p,np.copy(self.pq_1p),
+                                self.pq_3p_int,self.pq_3p,np.copy(self.pq_3p),
+                                self.pq_3pn_int,self.pq_3pn,np.copy(self.pq_3pn),
+                                self.N_nodes_v,self.N_nodes_i,0,self.N_nz_nodes)],dtype=dt_pf)  
                   
         V_node,I_node = pf_eval(params_pf) 
 
         self.V_node = V_node
         self.I_node = I_node 
         self.params_pf = params_pf 
+        
+    def read_loads_shapes(self,json_file):        
+        self.json_file = json_file
+        self.json_data = open(json_file).read().replace("'",'"')
+        data = json.loads(self.json_data)
+        self.load_shapes = data
 
+        ts_list = []
+        shapes_list = []
+        N_loads = 0
+        for load in self.loads:
+            shape_id = load['shape']
+            ts_list += [self.load_shapes[shape_id]['t_s']]
+            shapes_list += [self.load_shapes[shape_id]['shape']]
+            N_times = len(self.load_shapes[shape_id]['shape'])
+            N_loads += 1                
+        dtype = np.dtype([('time',np.float64,(N_loads,N_times)),
+                          ('shapes',np.float64,(N_loads,N_times)),
+                          ('N_loads',np.int32), ('N_times',np.int32)])
+        self.params_lshapes = np.rec.array([(np.array(ts_list),np.array(shapes_list),
+                                       N_loads, N_times)],dtype=dtype) 
+       
     def read_perturbations(self):
         
         buses_names = [item['bus'] for item in self.loads]
@@ -471,36 +595,41 @@ class pydss(object):
         V_sorted = []
         I_sorted = []
         S_sorted = []
+        start_node = 0
         self.V_results = self.V_node
         self.I_results = self.I_node
         
+        V_sorted = self.V_node[self.node_sorter]
+        I_sorted = self.I_node[self.node_sorter]   
+        
         nodes2string = ['v_an','v_bn','v_cn','v_gn']
         for bus in self.buses:
-            nodes_in_bus = []
-            for node in range(10):
-                bus_node = '{:s}.{:s}'.format(str(bus['bus']),str(node))
-                if bus_node in self.nodes:
-                    V = self.V_results[self.nodes.index(bus_node)][0]
-                    V_sorted += [V]
-                    nodes_in_bus += [node]
-            for node in range(10):
-                bus_node = '{:s}.{:s}'.format(str(bus['bus']),str(node))
-                if bus_node in self.nodes:
-                    I = self.I_results[self.nodes.index(bus_node)][0]
-                    I_sorted += [I]
-            if len(nodes_in_bus)==3:   # if 3 phases
-                v_ag = V_sorted[-3]
-                v_bg = V_sorted[-2]
-                v_cg = V_sorted[-1]
+            N_nodes = bus['N_nodes'] 
+#            for node in range(5):
+#                bus_node = '{:s}.{:s}'.format(str(bus['bus']),str(node))
+#                if bus_node in self.nodes:
+#                    V = self.V_results[self.nodes.index(bus_node)][0]
+#                    V_sorted += [V]
+#                    nodes_in_bus += [node]
+#            for node in range(5):
+#                bus_node = '{:s}.{:s}'.format(str(bus['bus']),str(node))
+#                if bus_node in self.nodes:
+#                    I = self.I_results[self.nodes.index(bus_node)][0]
+#                    I_sorted += [I]
+            if N_nodes==3:   # if 3 phases
+                v_ag = V_sorted[start_node+0,0]
+                v_bg = V_sorted[start_node+1,0]
+                v_cg = V_sorted[start_node+2,0]
 
-                i_a = I_sorted[-3]
-                i_b = I_sorted[-2]
-                i_c = I_sorted[-1]
+                i_a = I_sorted[start_node+0,0]
+                i_b = I_sorted[start_node+1,0]
+                i_c = I_sorted[start_node+2,0]
                 
                 s_a = (v_ag)*np.conj(i_a)
                 s_b = (v_bg)*np.conj(i_b)
                 s_c = (v_cg)*np.conj(i_c)
                 
+                start_node += 3
                 bus.update({'v_an':np.abs(v_ag),
                             'v_bn':np.abs(v_bg),
                             'v_cn':np.abs(v_cg),
@@ -518,7 +647,7 @@ class pydss(object):
                 bus.update({'q_a':s_a.imag,
                             'q_b':s_b.imag,
                             'q_c':s_c.imag})
-            if len(nodes_in_bus)==4:   # if 3 phases + neutral
+            if N_nodes==4:   # if 3 phases + neutral
                 v_ag = V_sorted[-4]
                 v_bg = V_sorted[-3]
                 v_cg = V_sorted[-2]
@@ -548,18 +677,64 @@ class pydss(object):
                             'q_b':s_b.imag,
                             'q_c':s_c.imag})
         self.V = np.array(V_sorted).reshape(len(V_sorted),1) 
-        return self.V              
+        return 0 #self.V              
         
     def get_i(self):
-       
-        I_lines = self.Y_primitive @ self.A.T @ self.V_results
+
+                
+        t_0 = time.time()
+        
+        I_lines = self.Y_primitive_sp @ self.A_sp.T @ self.V_results
+        
+        t_0 = time.time()
         
         it_single_line = 0
+        for trafo in self.transformers:
+
+            cond_1 = trafo['conductors_1'] 
+            cond_2 = trafo['conductors_2']   
+            
+            I_1a = (I_lines[it_single_line,0])
+            I_1b = (I_lines[it_single_line+1,0])
+            I_1c = (I_lines[it_single_line+2,0])
+            I_1n = (I_lines[it_single_line+3,0])
+            
+            I_2a = (I_lines[it_single_line+cond_1+0,0])
+            I_2b = (I_lines[it_single_line+cond_1+1,0])
+            I_2c = (I_lines[it_single_line+cond_1+2,0])
+            I_2n = (I_lines[it_single_line+cond_1+3,0])
+            
+            #I_n = (I_lines[it_single_line+3,0])
+            if cond_1 <=3:
+                I_1n = I_1a+I_1b+I_1c
+            if cond_2 <=3:
+                I_2n = I_2a+I_2b+I_2c
+                
+            it_single_line += cond_1 + cond_2
+            trafo.update({'i_1a_m':np.abs(I_1a)})
+            trafo.update({'i_1b_m':np.abs(I_1b)})
+            trafo.update({'i_1c_m':np.abs(I_1c)})
+            trafo.update({'i_1n_m':np.abs(I_1n)})
+            trafo.update({'i_2a_m':np.abs(I_2a)})
+            trafo.update({'i_2b_m':np.abs(I_2b)})
+            trafo.update({'i_2c_m':np.abs(I_2c)})
+            trafo.update({'i_2n_m':np.abs(I_2n)})
+            trafo.update({'deg_1a':np.angle(I_1a, deg=True)})
+            trafo.update({'deg_1b':np.angle(I_1b, deg=True)})
+            trafo.update({'deg_1c':np.angle(I_1c, deg=True)})
+            trafo.update({'deg_1n':np.angle(I_1n, deg=True)})
+            trafo.update({'deg_2a':np.angle(I_2a, deg=True)})
+            trafo.update({'deg_2b':np.angle(I_2b, deg=True)})
+            trafo.update({'deg_2c':np.angle(I_2c, deg=True)})
+            trafo.update({'deg_2n':np.angle(I_2n, deg=True)})
+                        
+        self.I_lines = I_lines
         for line in self.lines:
             I_a = (I_lines[it_single_line,0])
             I_b = (I_lines[it_single_line+1,0])
             I_c = (I_lines[it_single_line+2,0])
-            I_n = (I_lines[it_single_line+3,0])
+            #I_n = (I_lines[it_single_line+3,0])
+            I_n = I_a+I_b+I_c
             it_single_line += len(line['bus_j_nodes'])
             line.update({'i_a_m':np.abs(I_a)})
             line.update({'i_b_m':np.abs(I_b)})
@@ -569,8 +744,10 @@ class pydss(object):
             line.update({'deg_b':np.angle(I_b, deg=True)})
             line.update({'deg_c':np.angle(I_c, deg=True)})
             line.update({'deg_n':np.angle(I_n, deg=True)})
+        self.I_lines = I_lines
                         
-            
+
+        t_0 = time.time()            
 
     def bokeh_tools(self):
 
@@ -611,7 +788,7 @@ class pydss(object):
         v_bn = [item['v_bn'] for item in self.buses]
         v_cn = [item['v_cn'] for item in self.buses]
         v_ng = [item['v_ng'] for item in self.buses]
-        v_an = [item['v_an'] for item in self.buses]
+
         deg_an = [item['deg_an'] for item in self.buses]
         deg_bn = [item['deg_bn'] for item in self.buses]
         deg_cn = [item['deg_cn'] for item in self.buses]
@@ -619,21 +796,30 @@ class pydss(object):
         v_ab = [item['v_ab'] for item in self.buses]
         v_bc = [item['v_bc'] for item in self.buses]
         v_ca = [item['v_ca'] for item in self.buses]
-        p_a = ['{:2.2f}'.format(item['p_a']/1000) for item in self.buses]
-        p_b = ['{:2.2f}'.format(item['p_b']/1000) for item in self.buses]
-        p_c = ['{:2.2f}'.format(item['p_c']/1000) for item in self.buses]
-        q_a = ['{:2.2f}'.format(item['q_a']/1000) for item in self.buses]
-        q_b = ['{:2.2f}'.format(item['q_b']/1000) for item in self.buses]
-        q_c = ['{:2.2f}'.format(item['q_c']/1000) for item in self.buses]   
-        p_abc = ['{:2.2f}'.format((item['p_a'] +item['p_b']+item['p_c'])/1000) for item in self.buses] 
-        q_abc = ['{:2.2f}'.format((item['q_a'] +item['q_b']+item['q_c'])/1000) for item in self.buses] 
+        p_a = ['{:2.2f}'.format(float(item['p_a']/1000)) for item in self.buses]
+        p_b = ['{:2.2f}'.format(float(item['p_b']/1000)) for item in self.buses]
+        p_c = ['{:2.2f}'.format(float(item['p_c']/1000)) for item in self.buses]
+        q_a = ['{:2.2f}'.format(float(item['q_a']/1000)) for item in self.buses]
+        q_b = ['{:2.2f}'.format(float(item['q_b']/1000)) for item in self.buses]
+        q_c = ['{:2.2f}'.format(float(item['q_c']/1000)) for item in self.buses]   
+        p_abc = ['{:2.2f}'.format(float((item['p_a'] +item['p_b']+item['p_c'])/1000)) for item in self.buses] 
+        q_abc = ['{:2.2f}'.format(float((item['q_a'] +item['q_b']+item['q_c'])/1000)) for item in self.buses]
+        s_radio = []
+        for item in self.buses:            
+            s_total = np.abs(item['p_a'] + 1j*item['q_a']) + np.abs(item['p_b'] + 1j*item['q_b']) +  np.abs(item['p_c'] + 1j*item['q_c'])
+            scale = 0.01
+            s_scaled = s_total*scale
+            if s_scaled>20.0:
+                s_scaled = 20.0
+            s_radio += [s_scaled]
         self.bus_data = dict(x=x, y=y, bus_id=bus_id,
                              v_an=v_an, v_bn=v_bn, v_cn=v_cn, v_ng=v_ng, 
                              deg_an=deg_an, deg_bn=deg_bn, deg_cn=deg_cn, 
                              deg_ng=deg_ng,v_ab=v_ab,v_bc=v_bc,v_ca=v_ca,
                              p_a=p_a,p_b=p_b,p_c=p_c,
                              q_a=q_a,q_b=q_b,q_c=q_c,
-                             p_abc=p_abc,q_abc=q_abc)
+                             p_abc=p_abc,q_abc=q_abc,
+                             s_radio=s_radio)
         
         self.line_tooltip = '''
             <div>
@@ -705,14 +891,32 @@ def diag_2d_inv(Z_line_list):
 
     return Y_lines
 
-def diag_2d(Y_prim_list):
+def diag_2dsparse_inv(Z_line_list):
+
+    N_cols = 0
+
+    for Z_line in Z_line_list:
+        N_cols += Z_line.shape[1]
+
+    Y_lines = sparse.lil_matrix((N_cols,N_cols),dtype=np.complex128)
+
+    it = 0
+    for Z_line in Z_line_list:
+        Y_line = np.linalg.inv(Z_line)
+        N = Y_line.shape[0] 
+        Y_lines[it:(it+N),it:(it+N)] = Y_line
+        it += N
+
+    return Y_lines
+
+def diag_2dsparse(Y_prim_list):
 
     N_cols = 0
 
     for Y_prim in Y_prim_list:
         N_cols += Y_prim.shape[1]
 
-    Y_prims = np.zeros((N_cols,N_cols))+0j
+    Y_prims = sparse.lil_matrix((N_cols,N_cols),dtype=np.complex128)
 
     it = 0
     for Y_prim in Y_prim_list:
@@ -722,6 +926,28 @@ def diag_2d(Y_prim_list):
 
     return Y_prims
 
+def diag_2d(Y_prim_list):
+
+    N_cols = 0
+
+    for Y_prim in Y_prim_list:
+        N_cols += Y_prim.shape[1]
+
+    Y_prims = np.zeros((N_cols,N_cols),dtype=np.complex128)
+
+    it = 0
+    for Y_prim in Y_prim_list:
+        N = Y_prim.shape[0] 
+        Y_prims[it:(it+N),it:(it+N)] = Y_prim
+        it += N
+
+    return Y_prims
+
+def inv_splu(A_sparse):
+    N = A_sparse.shape[0]
+    lu = sla.splu(A_sparse)
+    return lu.solve(np.eye(N,dtype=np.complex128))
+    #return np.linalg.inv(A_sparse.toarray())
 
 def trafo_yprim(S_n,U_1n,U_2n,Z_cc,connection='Dyg11'):
     '''
@@ -973,7 +1199,8 @@ spec = [('value', float64[:,:]),
                  ('cplx_value_11', complex128[:,:]),
                  ('cplx_value_12', complex128[:,:])                 
                  ]
-    
+
+   
 def opendss2pydss(self,files_dict):
     
     
@@ -981,14 +1208,41 @@ def opendss2pydss(self,files_dict):
 
 if __name__ == "__main__":
     import time 
-    test ='opendss2pydss'
-    
+    test ='lveurope'
+    if test=='lv_europe_connected_load1': 
+        sys1 = pydss()
+        t_0 = time.time()
+        t_0 = time.time()
+        sys1.read('lv_europe_connected_load1.json')  # Load data
+        print('sys1.read()',time.time()-t_0) 
+        t_0 = time.time()
+        sys1.pf()
+        print('sys1.pf()',time.time()-t_0) 
+        t_0 = time.time()
+
+    if test=='bus4_1p_load':
+        sys1 = pydss()
+        sys1.read('bus4_1p_load.json')
+        sys1.pf()
+        sys1.get_v()
+        sys1.get_i()
+        #sys1.bokeh_tools()
+        
+    if test=='lveurope':
+        sys1 = pydss()
+        sys1.read('lv_europe_connected.json')  # Load data
+        sys1.pf()
+        sys1.get_v()
+        sys1.get_i()
+        sys1.bokeh_tools()
+        
     if test=='opendss2pydss':
-        trafos_file = '/home/jmmauricio/Documents/private/RESEARCH/opendss/LVnetworks/data/network_1/Feeder_1/Transformers.txt'
-        buses_file = '/home/jmmauricio/Documents/private/RESEARCH/opendss/LVnetworks/data/network_1/Feeder_1/buscoord.dss'
-        linecodes_file = '/home/jmmauricio/Documents/private/RESEARCH/opendss/LVnetworks/data/network_1/Feeder_1/LineCode.txt'
-        lines_file = '/home/jmmauricio/Documents/private/RESEARCH/opendss/LVnetworks/data/network_1/Feeder_1/Lines.txt'        
-        loads_file = '/home/jmmauricio/Documents/private/RESEARCH/opendss/LVnetworks/data/network_1/Feeder_1/Loads.txt'
+        trafos_file = './Feeder_1/Transformers.txt'
+        buses_file = './Feeder_1/buscoord.dss'
+        linecodes_file = './Feeder_1/LineCode.txt'
+        lines_file = './Feeder_1/Lines.txt'        
+        loads_file = './Feeder_1/Loads.txt'
+        load_shapes_file = './Feeder_1/LoadShapes.txt' 
         line_dict = {}
         
         buses = []
@@ -996,7 +1250,7 @@ if __name__ == "__main__":
         ## Transformers
         
         fobj_trafos = open(trafos_file, 'r')
-        
+        trafos_list = [] 
         for trafo in fobj_trafos.readlines():
             item_odss = 'Buses=['
             start_idx = trafo.find(item_odss)
@@ -1030,16 +1284,16 @@ if __name__ == "__main__":
             
             if conn_j == 'Delta' and conn_k == 'Wye':
                 connection = 'Dyg11_3w'
-                trafo_dict = {"bus_j": "R0",  "bus_k": "R1",  "S_n_kVA": float(S_n_kVA), 
+                trafo_dict = {"bus_j": bus_j,  "bus_k": bus_k,  "S_n_kVA": float(S_n_kVA), 
                               "U_1_kV":float(U_1_kV), "U_2_kV":float(U_2_kV), "R_cc_pu": float(0.0001), 
                               "X_cc_pu":float(X_pu)/100.0, "connection": "Dyg11_3w", "conductors_1":3, "conductors_2":3 }
 
-                
+   
             if not bus_j in buses:
                 buses += [bus_j]
             if not bus_k in buses:
                 buses += [bus_k]                
-                   
+            trafos_list += [trafo_dict]                       
         
         ## Lines
         
@@ -1048,11 +1302,13 @@ if __name__ == "__main__":
         read_list = [('Bus1','bus_j','str',1),
                      ('Bus2','bus_k','str',1),
                      ('Linecode','code','str',1),
-                     ('Length','m','float',1000.0),
+                     ('Length','m','float',1.0),
                      ('phases','N_conductors','int',1)]
         
         lines_list = []
+        
         for line in fobj_lines.readlines():
+            line_dict = {}
             for item_odss,item_py,tipo,scale in read_list:
                 start_idx = line.find(item_odss + '=')
                 end_idx = line.find(' ',start_idx)
@@ -1072,19 +1328,23 @@ if __name__ == "__main__":
             if not bus_k in buses:
                 buses += [bus_k]                
             
+            lines_list += [line_dict]    
+            
             
         ## Loads
-
+        loads_list = []
         load_dict = {}
         fobj_loads = open(loads_file, 'r')
         
         read_list = [('Phases','phases','int',1),
                      ('Bus1','bus','str',1),
                      ('kW','kW','float',1),
-                     ('PF','fp','float',1.0)]
+                     ('PF','fp','float',1.0),
+                     ('Daily','shape','str',1)]
         
         load_list = []
         for load in fobj_loads.readlines():
+            load_dict = {}
             for item_odss,item_py,tipo,scale in read_list:
                 start_idx = load.find(item_odss + '=')
                 end_idx = load.find(' ',start_idx)
@@ -1098,16 +1358,158 @@ if __name__ == "__main__":
                 if item_odss == 'Bus1':
                     if load_dict['phases'] == 1:
                         value,node = value.split('.') 
-                        load_dict.update({'bus_nodes':[int(node)]})
+                        
+                        load_dict.update({'bus_nodes':[int(node)],'type':'1P'})
                         
                 load_dict.update({item_py:value})
- 
+            loads_list += [load_dict]
+
             bus = load_dict['bus']
             if not bus in buses:
                 buses += [bus]
 
+           
+
+        ## Buses
+        
+        buses_list = []
         buses_array = np.genfromtxt(buses_file, delimiter=',', skip_header=1, dtype=[('nodes','S10'),('pos_x','f8'),('pos_y','f8')])   
-                       
+          
+        for bus in buses:
+            idx = np.where(buses_array['nodes']==np.array(bus,dtype='S10'))[0].astype(np.int32)
+            print(idx)
+            pos_x = buses_array['pos_x'][idx]
+            pos_y = buses_array['pos_y'][idx]
+            buses_dict = {"bus": bus,  
+                          "pos_x": float(pos_x), 
+                          "pos_y": float(pos_y), 
+                          "units": "m", 'U_kV':0.416}
+            buses_list += [buses_dict]                        
+            
+        ## Line codes
+        
+        fobj_linecodes = open(linecodes_file, 'r')
+
+        alpha = np.exp(2.0/3*np.pi*1j)
+        Asym =  np.array([[1, 1, 1],
+                          [1, alpha**2, alpha],
+                          [1, alpha, alpha**2]])
+        inv_Asym = np.linalg.inv(Asym)
+
+        line_codes = {}
+        for linecode in fobj_linecodes.readlines():
+            item_odss = 'LineCode.'
+            start_idx = linecode.find(item_odss)
+            end_idx = linecode.find(' ',start_idx)
+            linecode_id = linecode[((start_idx+len(item_odss))):end_idx]
+            l = {}
+            for item in ['R1','R0','X1','X0','C1','C0']:
+                item_odss = item + '='
+                start_idx = linecode.find(item_odss)
+                end_idx = linecode.find(' ',start_idx)
+                value = linecode[((start_idx+len(item_odss))):end_idx]
+                l.update({item:float(value)})
+            Z_012 = np.array([[l['R0']+1j*l['X0'],0,0],
+                              [0,l['R1']+1j*l['X1'],0],
+                              [0,0,l['R1']+1j*l['X1']]])
+            Z_abc = inv_Asym @ Z_012 @ Asym
+            
+            line_codes.update({linecode_id:{'R':Z_abc.real.tolist(),
+                                            'X':Z_abc.imag.tolist()}})
+            json.dumps(line_codes)    
+        
+        v_sources_list = [
+		{"bus": "SourceBus","bus_nodes": [1, 2, 3], "deg": [0, -120, -240], "kV": [11.547, 11.547, 11.547]}]
+        
+        from collections import OrderedDict
+        
+
+ 
+    
+        # Load Shapes
+        fobj_loadshapes = open(load_shapes_file, 'r')    
+        
+        load_shapes_list = [] 
+        for load_shape in fobj_loadshapes.readlines():
+            item_odss = 'New Loadshape.'
+            start_idx = load_shape.find(item_odss)
+            end_idx = load_shape.find(' ',start_idx+4)
+            shape_id = load_shape[((start_idx+len(item_odss))):end_idx]
+
+            item_odss = 'npts='
+            start_idx = load_shape.find(item_odss)
+            end_idx = load_shape.find(' ',start_idx)
+            npts = int(load_shape[((start_idx+len(item_odss))):end_idx])
+
+            item_odss = 'interval='
+            start_idx = load_shape.find(item_odss)
+            end_idx = load_shape.find(' ',start_idx)
+            interval = float(load_shape[((start_idx+len(item_odss))):end_idx])
+            
+            item_odss = 'mult=(file='
+            start_idx = load_shape.find(item_odss)
+            end_idx = load_shape.find(')',start_idx+4)
+            shape_file = load_shape[((start_idx+len(item_odss))):end_idx]
+            shape_file = shape_file.replace('\\','/')
+            #fobj_shape = open(, 'r') 
+            values = np.loadtxt(shape_file)
+            t_s = np.linspace(0,npts*interval*3600,npts)
+            load_shapes_list += [(shape_id,{'t_s':t_s.tolist(), 'shape':values.tolist()})] #, 't_s':t_s.tolist(), 'shape':values.tolist()}]
+        dict_shapes = OrderedDict(load_shapes_list)
+
+        out = json.dumps(dict_shapes) 
+        out = out.replace('},','},\n')
+        out = out.replace('],','],\n')
+        fobj_out = open('load_shapes_list.json','w')
+        fobj_out.write(out)
+        fobj_out.close()
+        
+        
+ 
+        data_dict = OrderedDict([('transformers',trafos_list),
+                     ('lines',lines_list),
+                     ('buses',buses_list),
+                     ('v_sources',v_sources_list),
+                     ('loads',loads_list),
+                     ('line_codes',line_codes)])
+        out = json.dumps(data_dict) 
+        out = out.replace('},','},\n')
+        out = out.replace('],','],\n')
+        fobj_out = open('out.json','w')
+        fobj_out.write(out)
+        fobj_out.close()            
+            
+        json_data = open('out.json').read().replace("'",'"')
+        data = json.loads(json_data)
+        
+#        sys1 = pydss('out.json')
+#        sys1.pf()
+#        sys1.get_v()
+#        sys1.get_i()
+
+#            item_odss = 'kVAs=['
+#            start_idx = trafo.find(item_odss)
+#            end_idx = trafo.find(']',start_idx)
+#            value = trafo[((start_idx+len(item_odss))):end_idx]
+#            S_n_kVA,S_n_kVA_2 = value.split(' ')
+#
+#            item_odss = 'XHL='
+#            start_idx = trafo.find(item_odss)
+#            end_idx = trafo.find(']',start_idx)
+#            value = trafo[((start_idx+len(item_odss))):end_idx]
+#            X_pu= value
+#            
+#            if conn_j == 'Delta' and conn_k == 'Wye':
+#                connection = 'Dyg11_3w'
+#                trafo_dict = {"bus_j": "R0",  "bus_k": "R1",  "S_n_kVA": float(S_n_kVA), 
+#                              "U_1_kV":float(U_1_kV), "U_2_kV":float(U_2_kV), "R_cc_pu": float(0.0001), 
+#                              "X_cc_pu":float(X_pu)/100.0, "connection": "Dyg11_3w", "conductors_1":3, "conductors_2":3 }
+
+
+
+
+
+              
 #            print(load_dict)
 
 
@@ -1132,9 +1534,9 @@ if __name__ == "__main__":
 
     if test=='pf':
         sys1 = pydss('cigre_lv_connected.json')
-#        sys1.pf()
-#        sys1.get_v()      # post process voltages
-#        sys1.get_i()      # post process currents
+        sys1.pf()
+        sys1.get_v()      # post process voltages
+        sys1.get_i()      # post process currents
 #        print(sys1.buses[0])
 #        print(sys1.buses[1])
 #        print(sys1.buses[10])
@@ -1160,7 +1562,7 @@ if __name__ == "__main__":
         Z_cc_pu = 0.01+0.04j
         Y_trafo_prim = trafo_yprim(S_n,U_1n,U_2n,Z_cc_pu,type='Ynd11')
         
-    Z_UG3_3w = abcn2abc(np.array(line_codes['UG3'])) 
+        Z_UG3_3w = abcn2abc(np.array(line_codes['UG3'])) 
 
 #    t0 = time.time()
 #    sys1 = pydss('cigre_lv_isolated.json')

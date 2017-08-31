@@ -1,0 +1,5 @@
+New Monitor.LINE1_PQ_vs_Time Line.LINE1 2 Mode=1 ppolar=0
+New Monitor.LINE1_VI_vs_Time Line.LINE1 2 Mode=0
+New Monitor.LINE2_PQ_vs_Time Line.LINE2 2 Mode=1 ppolar=0
+New Monitor.LINE2_VI_vs_Time Line.LINE2 2 Mode=0
+

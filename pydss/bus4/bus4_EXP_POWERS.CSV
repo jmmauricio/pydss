@@ -1,0 +1,8 @@
+Element, Terminal, P(kW), Q(kvar),  P_Normal, Q_Normal, P_Emergency, Q_Emergency
+"Line.LINE1"            ,   1,       109.5,        33.4,        17.9,         5.5,         0.0,         0.0
+"Line.LINE1"            ,   2,      -107.7,       -33.2
+"Line.LINE2"            ,   1,       107.7,        33.2,        17.6,         5.4,         0.0,         0.0
+"Line.LINE2"            ,   2,       -98.5,       -32.4
+"Transformer.TR1"       ,   1,       109.7,        33.9,         0.0,         0.0,         0.0,         0.0
+"Transformer.TR1"       ,   2,      -109.5,       -33.4
+"Load.LOAD1"            ,   1,        98.5,        32.4
