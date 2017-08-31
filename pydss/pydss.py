@@ -20,7 +20,7 @@ import time
 from scipy import sparse
 from scipy.sparse import linalg as sla
 
-line_codes = {'OH1':[[0.540 + 0.777j, 0.049 + 0.505j, 0.049 + 0.462j, 0.049 + 0.436j],
+line_codes_lib = {'OH1':[[0.540 + 0.777j, 0.049 + 0.505j, 0.049 + 0.462j, 0.049 + 0.436j],
                       [0.049 + 0.505j, 0.540 + 0.777j, 0.049 + 0.505j, 0.049 + 0.462j],
                       [0.049 + 0.462j, 0.049 + 0.505j, 0.540 + 0.777j, 0.049 + 0.505j],
                       [0.049 + 0.436j, 0.049 + 0.462j, 0.049 + 0.505j, 0.540 + 0.777j]],
@@ -96,8 +96,10 @@ class pydss(object):
         self.Dt = 10.0e-3
         self.Dt_out = 0.01
         
-        
-        transformers = data['transformers']
+        if 'transformers' in data:
+            transformers = data['transformers']
+        else:
+            transformers = []
         lines = data['lines']
         line_codes_data = data['line_codes']
         loads = data['loads']
@@ -231,7 +233,7 @@ class pydss(object):
                 
         for line in lines:
             line_code = line['code']
-            if not line_code in line:
+            if not line_code in line_codes_lib:
                 R = np.array(data['line_codes'][line_code]['R'])
                 X = np.array(data['line_codes'][line_code]['X'])
                 Z = R + 1j*X
@@ -333,9 +335,10 @@ class pydss(object):
         print('Y_lines_primitive -> Y_primitive_sp',time.time()-t_0) 
         t_0 = time.time()
         
-        Y_primitive_sp[0:N_trafos_len,0:N_trafos_len] = Y_trafos_primitive
-        print('Y_trafos_primitive -> Y_primitive_sp',time.time()-t_0) 
-        t_0 = time.time()
+        if N_trafos_len>0:
+            Y_primitive_sp[0:N_trafos_len,0:N_trafos_len] = Y_trafos_primitive
+            print('Y_trafos_primitive -> Y_primitive_sp',time.time()-t_0) 
+            t_0 = time.time()
 
 #        = np.vstack((np.hstack((Y_trafos_primitive,np.zeros((N_trafos_len,N_lines_len)))),
 #                                   np.hstack((np.zeros((N_lines_len,N_trafos_len)),Y_lines_primitive))))  
@@ -1208,7 +1211,18 @@ def opendss2pydss(self,files_dict):
 
 if __name__ == "__main__":
     import time 
-    test ='lveurope'
+    test ='cigre_lv'
+    
+    if test=='cigre_lv': 
+        sys1 = pydss()
+        t_0 = time.time()
+        sys1.read('cigre_lv.json')  # Load data
+        print('sys1.read()',time.time()-t_0) 
+        t_0 = time.time()
+        sys1.pf()
+        print('sys1.pf()',time.time()-t_0) 
+        t_0 = time.time()
+        
     if test=='lv_europe_connected_load1': 
         sys1 = pydss()
         t_0 = time.time()
