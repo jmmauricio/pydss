@@ -65,8 +65,8 @@ setup(
             "ipython"
         ]
     },
-    packages=find_packages('src'),
-    package_dir={'': 'src'},
+    packages=find_packages('.'),
+    package_dir={'': '.'},
     entry_points={
         'console_scripts': [
             'pydss = pydss.cli:main'
@@ -87,7 +87,7 @@ setup(
         "Topic :: Scientific/Engineering :: Physics",
         "Topic :: Scientific/Engineering :: Astronomy",
     ],
-    long_description=io.open('README.rst', encoding='utf-8').read(),
+    long_description=io.open('README.md', encoding='utf-8').read(),
     package_data={"poliastro": ['tests/*.py']},
     include_package_data=True,
     zip_safe=False,

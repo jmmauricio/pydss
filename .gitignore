@@ -2,3 +2,7 @@ legacy
 opendss
 _pycahche_
 Ab.npz
+build
+dist
+pydss.egg-info
+..gitignore.kate-swp
