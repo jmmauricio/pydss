@@ -1,0 +1,82 @@
+﻿EJEMPLO EN ESTUDIO
+
+!>>>>>>>>>>>>>>>>DEFINICIÓN DE LA FUENTE DE TENSIÓN<<<<<<<<<<<<<<<<<<<<<<
+basekv=0.4 !Tensión base, 400 V
+pu=1.0    !Tensión de operación, 400 V
+Angle=0
+Frequency=50
+Phases=3
+Mvasc3=100000 Mvasc1=125000 !Se parte de una fuente ideal
+
+
+!DEFINICIÓN DE TRANSFORMADORES
+
+ !CASO 1: TRANSFORMADOR DE 150 kVA
+Phases=3
+Windings=2
+X12=4.0031
+~ wdg=1 conn=delta  kv=20   kva=150   %r=1.003125 
+~ wdg=2 conn=wye    kv=0.4  kva=150   %r=1.003125
+ 
+  !CASO 2: TRANSFORMADOR DE 500 kVA
+Phases=3
+Windings=2
+X12=4.0
+~ wdg=1 conn=delta  kv=20   kva=500  %r=1.0
+~ wdg=2 conn=wye    kv=0.4  kva=500  %r=1.0
+
+
+!>>>>>>>>>>>>>>>>DEFINICIÓN DE LA LÍNEA<<<<<<<<<<<<<<<<<<<<<<
+Length=0.2 !Uds. km
+
+!El modelo de línea definido es el cable UG3 del modelo Europeo de BT proporcionado por Cigré
+!Los datos de impedancia de la línea se proporcionan en el siguiente formato
+~R1, X1, R0, X0
+
+!CASO 1: 3 fases + neutro
+Phases=4
+
+!CASO 2: 3 fases, sin neutro
+Phases=3
+
+
+
+!>>>>>>>>>>>>>>>>DEFINICIÓN DE LA CARGA<<<<<<<<<<<<<<<<<<<<<<
+Model=1 !Modelo de potencia constante
+Vminpu=0.6 Vmaxpu=1.4
+
+!CASO 1: carga equilibrada
+kv=0.4
+kva=100
+Pf=0.85
+
+!CASO 2: Carga desequilibrada, desequilibrio-->a:40%, b:30%, c:30%
+kv=0.4/sqrt(3)
+Phases=1
+kva=40/30/30 !fase a/fase b/ fase c
+Pf=0.85
+
+!CASO 3: Carga desequilibrada, desequilibrio-->a:50%, b:30%, c:20%
+kv=0.4/sqrt(3)
+Phases=1
+kva=50/30/20 !fase a/fase b/ fase c
+Pf=0.85
+
+!CASO 4: Carga desequilibrada, desequilibrio-->a:20%, b:50%, c:30%
+!CASO 5: Carga desequilibrada, desequilibrio-->a:30%, b:20%, c:50%
+
+
+!>>>>>>>>>>>>>>>>DEFINICIÓN DE LA PUESTA A TIERRA<<<<<<<<<<<<<<<<<<<<<<
+!Puesta a tierra del lado de la fuente (Rg1)
+R=0.0001 X=0
+
+!Puesta a tierra del lado de la carga (Rg2)
+
+!CASO 1: Puesta a tierra de 40 Ω
+R=40 X=0
+
+!CASO 2: Puesta a tierra rígida
+R=0.0001 X=0
+
+!CASO 3: Puesta a tierra abierta
+R=∞ X=0

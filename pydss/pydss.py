@@ -36,7 +36,11 @@ line_codes_lib = {'OH1':[[0.540 + 0.777j, 0.049 + 0.505j, 0.049 + 0.462j, 0.049 
                      [0.049 + 0.673j, 0.211 + 0.747j, 0.049 + 0.673j, 0.049 + 0.651j], 
                      [0.049 + 0.651j, 0.049 + 0.673j, 0.211 + 0.747j, 0.049 + 0.673j], 
                      [0.049 + 0.673j, 0.049 + 0.651j, 0.049 + 0.673j, 0.211 + 0.747j]],
-              'UG2':[[0.314 + 0.762j, 0.049 + 0.687j, 0.049 + 0.665j, 0.049 + 0.687j], 
+         'UG1_luna':[[0.211 + 0.747j, 0.049 +0.6657j, 0.049 +0.6657j, 0.049 +0.6657j], 
+                     [0.049 +0.6657j, 0.211 + 0.747j, 0.049 +0.6657j, 0.049 +0.6657j], 
+                     [0.049 +0.6657j, 0.049 +0.6657j, 0.211 + 0.747j, 0.049 +0.6657j], 
+                     [0.049 +0.6657j, 0.049 +0.6657j, 0.049 +0.6657j, 0.211 + 0.747j]],
+              'UG2':[[0.314 + 0.762j, 0.049 + 0.687j,0.049 + 0.665j, 0.049 + 0.687j], 
                      [0.049 + 0.687j, 0.314 + 0.762j, 0.049 + 0.687j, 0.049 + 0.665j], 
                      [0.049 + 0.665j, 0.049 + 0.687j, 0.314 + 0.762j, 0.049 + 0.687j], 
                      [0.049 + 0.687j, 0.049 + 0.665j, 0.049 + 0.687j, 0.314 + 0.762j]], 
@@ -88,6 +92,8 @@ class pydss(object):
         data = json.loads(self.json_data)
         self.data = data
         
+        flog = open('log.txt','w')
+        
         # power flow options
         self.max_iter = 20
         
@@ -105,7 +111,12 @@ class pydss(object):
         loads = data['loads']
         v_sources = data['v_sources']
         buses = data['buses']
-        
+
+        if 'groundings' in data:
+            groundings = data['groundings']
+        else:
+            groundings = []
+            
         self.transformers = transformers
         self.lines = lines
         self.loads = loads
@@ -120,6 +131,8 @@ class pydss(object):
         node_sorter = []
         N_v_known = 0
         N_nz_nodes = 0  # number on non zero current nodes
+        
+        
         ## Known voltages
         V_known_list = []
         for v_source in v_sources:
@@ -146,10 +159,13 @@ class pydss(object):
         pq_3pn_list = []
         pq_3p_int_list = []
         pq_3p_list = []
+        pq_1pn_int_list = []
+        pq_1pn_list = []
         pq_1p_int_list = []
         pq_1p_list = []
         it_node_i = 0
         
+        ### Loads
         t_0 = time.time()
         for load in loads:
             if not 'bus_nodes' in load:   # if nodes are not declared, default nodes are created
@@ -178,9 +194,28 @@ class pydss(object):
                 pq_3p_int_list += [list(it_node_i + np.array([0,1,2]))]
                 it_node_i += 3
                 if 'kVA' in load:
+                    S_va = -1000.0*load['kVA']
+                    phi = np.arccos(load['fp'])
                     if type(load['kVA']) == float:
-                        pq_3p_list += [[-1000.0*load['kVA']*np.exp(1j*np.arccos(load['fp'])*np.sign(load['fp']))/3]]
+                        pq_3p_list += [[S_va*np.exp(1j*phi*np.sign(load['fp']))]]
 
+            if load['type'] == '1P+N':
+                node_j = '{:s}.{:s}'.format(load['bus'],str(load['bus_nodes'][0]))
+                if not node_j in nodes: nodes +=[node_j]
+                node_k = '{:s}.{:s}'.format(load['bus'],str(load['bus_nodes'][1]))
+                if not node_k in nodes: nodes +=[node_k]
+                pq_1pn_int_list += [np.array([nodes.index(node_j),nodes.index(node_k)])-N_v_known]
+                it_node_i += 2
+                if 'kVA' in load:
+                    S_va = -1000.0*load['kVA']
+                    phi = np.arccos(load['fp'])
+                    pq_1pn_list += [[S_va*np.exp(1j*phi*np.sign(load['fp']))]]
+                if 'kW' in load:
+                    S_va = -1000.0*load['kW']/load['fp']
+                    phi = np.arccos(load['fp'])
+                    pq_1pn_list += [[S_va*np.exp(1j*phi*np.sign(load['fp']))]]
+        
+        
             if load['type'] == '1P':
                 pq_1p_int_list += [[it_node_i ]]
                 it_node_i += 1
@@ -192,8 +227,12 @@ class pydss(object):
                     S_va = -1000.0*load['kW']/load['fp']
                     phi = np.arccos(load['fp'])
                     pq_1p_list += [[S_va*np.exp(1j*phi*np.sign(load['fp']))]]
-    
 
+        
+        N_pq_3p = len(pq_3p_list)
+        N_pq_3pn = len(pq_3pn_list)
+        N_pq_1p = len(pq_1p_list)
+        N_pq_1pn = len(pq_1pn_list)
         N_nz_nodes += it_node_i                               
 #            for kVA,fp in  zip(load['kVA'],load['fp']): # known complex power list 
 #                S_known_list += [1000.0*kVA*np.exp(1j*np.arccos(fp)*np.sign(fp))]
@@ -201,9 +240,13 @@ class pydss(object):
         pq_3pn = np.array(pq_3pn_list) # known complex power list to numpy array
         pq_3p_int = np.array(pq_3p_int_list) # known complex power list to numpy array
         pq_3p = np.array(pq_3p_list) # known complex power list to numpy array
+        pq_1pn_int = np.array(pq_1pn_int_list) # known complex power list to numpy array
+        pq_1pn = np.array(pq_1pn_list) # known complex power list to numpy array
         pq_1p_int = np.array(pq_1p_int_list) # known complex power list to numpy array
         pq_1p = np.array(pq_1p_list) # known complex power list to numpy array
 
+
+        ### Transformers to nodes
         for trafo in transformers:
             if trafo['connection'] == 'Dyn11':
                 N_nodes_primary_default = trafo['conductors_1']
@@ -228,17 +271,18 @@ class pydss(object):
                 node_k = '{:s}.{:s}'.format(trafo['bus_k'], str(item))
                 if not node_k in nodes: nodes +=[node_k]
 
-        print('trafos',time.time()-t_0) 
+        flog.write('Transformers read in: {:2.3f} s'.format(time.time()-t_0)) 
         t_0 = time.time()
                 
+        ### Lines to nodes
         for line in lines:
             line_code = line['code']
             if not line_code in line_codes_lib:
                 R = np.array(data['line_codes'][line_code]['R'])
                 X = np.array(data['line_codes'][line_code]['X'])
                 Z = R + 1j*X
-                line_codes.update({line_code:Z.tolist()})
-            N_conductors = len(line_codes[line['code']])
+                line_codes_lib.update({line_code:Z.tolist()})
+            N_conductors = len(line_codes_lib[line['code']])
             A_n_cols += N_conductors
             if not 'bus_j_nodes' in line:   # if nodes are not declared, default nodes are created
                 line.update({'bus_j_nodes': list(range(1,N_conductors+1))})
@@ -254,13 +298,18 @@ class pydss(object):
 
         N_nodes = len(nodes)
 
-        A = np.zeros((N_nodes,A_n_cols))
-        A_sp = sparse.lil_matrix((N_nodes, A_n_cols), dtype=np.float32)
+        ### Groundings (no new nodes, only aditionals columns in A matriz)
+        for ground in groundings:
+            A_n_cols += 1        
         
-        print('lines',time.time()-t_0) 
-        t_0 = time.time()
         
-        it_col = 0
+        ## Y primitive
+        A = np.zeros((N_nodes,A_n_cols)) # incidence matrix (dense)
+        A_sp = sparse.lil_matrix((N_nodes, A_n_cols), dtype=np.float32) # incidence matrix (sparse)
+        it_col = 0  # column in incidence matrix
+        
+        
+        ### Transformers to Y primitive
         Y_trafos_prims =  []
         for trafo in transformers:
             S_n = trafo['S_n_kVA']*1000.0
@@ -288,9 +337,11 @@ class pydss(object):
                 A[row,col] = 1
                 it_col +=1 
  
-        print('trafos2',time.time()-t_0) 
-        t_0 = time.time()
-       
+        Y_trafos_primitive = diag_2d(Y_trafos_prims)        # dense
+        Y_trafos_primitive = diag_2dsparse(Y_trafos_prims)  # sparse
+        N_trafos_len = Y_trafos_primitive.shape[0]
+        
+        ### Lines to Y primitive       
         Z_line_list =  []
         for line in lines:
             for item in  line['bus_j_nodes']: # the list of nodes '[<bus>.<node>.<node>...]' is created 
@@ -309,39 +360,45 @@ class pydss(object):
                 A[row,col] = -1
                 it_col +=1   
 
-            Z_line_list += [line['m']*0.001*np.array(line_codes[line['code']])]   # Line code to list of Z lines
+            Z_line_list += [line['m']*0.001*np.array(line_codes_lib[line['code']])]   # Line code to list of Z lines
 
-        Y_trafos_primitive = diag_2d(Y_trafos_prims)
-        Y_lines_primitive = diag_2d_inv(Z_line_list)
-        print('lines 2',time.time()-t_0) 
-        t_0 = time.time()
+        ### Groundings       
+        for grounding in groundings:
+            for item in  grounding['bus_nodes']: # the list of nodes '[<bus>.<node>.<node>...]' is created 
+                node_j = '{:s}.{:s}'.format(grounding['bus'], str(item))
+                row = nodes.index(node_j)
+                col = it_col
+                A_sp[row,col] = 1
+                A[row,col] = 1
+                it_col +=1  
+                Z_line_list += [np.array(grounding['R'] + 1j*grounding['X']).reshape((1,1))]   # Line code to list of Z lines
+                
+                
+        Y_lines_primitive = diag_2d_inv(Z_line_list)        # dense
+        Y_lines_primitive = diag_2dsparse_inv(Z_line_list)  # sparse
         
-        N_trafos_len = Y_trafos_primitive.shape[0]
         N_lines_len  = Y_lines_primitive.shape[0]
+        
+        ### Full  Y primitive         
         N_prim = N_trafos_len + N_lines_len
-#        Y_primitive = np.vstack((np.hstack((Y_trafos_primitive,np.zeros((N_trafos_len,N_lines_len)))),
-#                                 np.hstack((np.zeros((N_lines_len,N_trafos_len)),Y_lines_primitive))))
-        
-        Y_trafos_primitive = diag_2dsparse(Y_trafos_prims)
-        Y_lines_primitive = diag_2dsparse_inv(Z_line_list)
-        print('diag_2dsparse',time.time()-t_0) 
-        t_0 = time.time()
-        
+       
+#        #### dense
+#        if N_trafos_len>0:
+#            Y_primitive = np.vstack((np.hstack((Y_trafos_primitive,np.zeros((N_trafos_len,N_lines_len)))),
+#                                     np.hstack((np.zeros((N_lines_len,N_trafos_len)),Y_lines_primitive))))
+#        else:
+#            Y_primitive = Y_lines_primitive
+            
+       
+        #### sparse
         Y_primitive_sp = sparse.csc_matrix((N_prim,N_prim),dtype=np.complex128)
-        print('sparse.lil_matrix',time.time()-t_0) 
-        t_0 = time.time()
-        
+       
         Y_primitive_sp[N_trafos_len:N_prim,N_trafos_len:N_prim] = Y_lines_primitive     
-        print('Y_lines_primitive -> Y_primitive_sp',time.time()-t_0) 
-        t_0 = time.time()
+
         
         if N_trafos_len>0:
             Y_primitive_sp[0:N_trafos_len,0:N_trafos_len] = Y_trafos_primitive
-            print('Y_trafos_primitive -> Y_primitive_sp',time.time()-t_0) 
-            t_0 = time.time()
 
-#        = np.vstack((np.hstack((Y_trafos_primitive,np.zeros((N_trafos_len,N_lines_len)))),
-#                                   np.hstack((np.zeros((N_lines_len,N_trafos_len)),Y_lines_primitive))))  
         A_v = A[0:N_v_known,:]   
         N_nodes_i = N_nodes-N_v_known
         A_i = A_sp[N_v_known:(N_v_known+N_nodes_i),:] 
@@ -355,29 +412,33 @@ class pydss(object):
         self.A_i = A_i
 
         
-#        self.Y = A.T @ Y_primitive @ A
-        self.Y = A_sp.T @ Y_primitive_sp @ A_sp        
+#        self.Y = A.T @ Y_primitive @ A (dense)
+        self.Y = A_sp @ Y_primitive_sp @ A_sp.T        
         self.Y_primitive = Y_primitive_sp.toarray()
         self.Y_ii = A_i @ Y_primitive_sp @ A_i.T
         self.Y_iv = A_i @ Y_primitive_sp @ A_v.T
         self.Y_vv = A_v @ Y_primitive_sp @ A_v.T
         self.Y_vi = A_v @ Y_primitive_sp @ A_i.T
 
-        print('Ys calc',time.time()-t_0) 
+        flog.write('Ys calc {:2.3f}\n'.format(time.time()-t_0))
         t_0 = time.time()
         
         #self.inv_Y_ii = sparse.linalg.inv()
         self.inv_Y_ii = inv_splu(sparse.csc_matrix(self.Y_ii))        
-        print('inv_Y_ii',time.time()-t_0) 
-        t_0 = time.time()
+        flog.write('inv_Y_ii {:2.3f}\n'.format(time.time()-t_0))
         
+        self.N_pq_3pn = N_pq_3pn
         self.pq_3pn_int = pq_3pn_int
         self.pq_3pn = pq_3pn
+        self.N_pq_3p = N_pq_3p
         self.pq_3p_int = pq_3p_int
         self.pq_3p = pq_3p
+        self.N_pq_1p = N_pq_1p
         self.pq_1p_int = pq_1p_int
         self.pq_1p = pq_1p
-        self.nodes = nodes
+        self.N_pq_1pn = N_pq_1pn
+        self.pq_1pn_int = pq_1pn_int
+        self.pq_1pn = pq_1pn
         self.V_known = V_known
         
         self.I_node = np.vstack((np.zeros((self.N_nodes_v,1)),
@@ -400,7 +461,11 @@ class pydss(object):
                     N_nodes += 1
                 bus.update({'N_nodes':N_nodes})
         self.node_sorter = node_sorter
-        
+
+        flog.close()        
+
+
+
     def pf(self):
         
         N_i = self.N_nodes_i
@@ -421,15 +486,15 @@ class pydss(object):
         it = 0
         for node in self.nodes[N_v:]:
             bus,node = node.split('.')
-            self.theta_0 = np.deg2rad(-30.0)
+            self.theta_0 = np.deg2rad(0.0)
             
             V_m_nom = self.buses[buses_in_data_file.index(bus)]['U_kV']*1000.0/np.sqrt(3)
             if node == '1': 
                 V_unknown_0[it] = V_m_nom*np.exp(1j*(self.theta_0))
             if node == '2': 
-                V_unknown_0[it] = V_m_nom*np.exp(1j*(self.theta_0-2.0/3*np.pi))
+                V_unknown_0[it] = V_m_nom*np.exp(1j*(self.theta_0-2.0/3.0*np.pi))
             if node == '3': 
-                V_unknown_0[it] = V_m_nom*np.exp(1j*(self.theta_0-4.0/3*np.pi))
+                V_unknown_0[it] = V_m_nom*np.exp(1j*(self.theta_0-4.0/3.0*np.pi))
             if node == '4': 
                 V_unknown_0[it] = 0.0
                 
@@ -455,9 +520,10 @@ class pydss(object):
                   ('Y_vv',np.complex128,(N_v,N_v)),('Y_iv',np.complex128,(N_i,N_v)),
                   ('inv_Y_ii',np.complex128,(N_i,N_i)),('Y_ii',np.complex128,(N_i,N_i)),
                   ('I_node',np.complex128,(N_v+N_i,1)),('V_node',np.complex128,(N_v+N_i,1)),
-                  ('pq_1p_int',np.int32,self.pq_1p_int.shape),('pq_1p',np.complex128,self.pq_1p.shape),('pq_1p_0',np.complex128,self.pq_1p.shape),
-                  ('pq_3p_int',np.int32,self.pq_3p_int.shape),('pq_3p',np.complex128,self.pq_3p.shape),('pq_3p_0',np.complex128,self.pq_3p.shape),
-                  ('pq_3pn_int',np.int32,self.pq_3pn_int.shape),('pq_3pn',np.complex128,self.pq_3pn.shape),('pq_3pn_0',np.complex128,self.pq_3pn.shape),
+                  ('N_pq_1p',np.int32),('pq_1p_int',np.int32,self.pq_1p_int.shape),('pq_1p',np.complex128,self.pq_1p.shape),('pq_1p_0',np.complex128,self.pq_1p.shape),                  
+                  ('N_pq_1pn',np.int32),('pq_1pn_int',np.int32,self.pq_1pn_int.shape),('pq_1pn',np.complex128,self.pq_1pn.shape),('pq_1pn_0',np.complex128,self.pq_1pn.shape),
+                  ('N_pq_3p',np.int32),('pq_3p_int',np.int32,self.pq_3p_int.shape),('pq_3p',np.complex128,self.pq_3p.shape),('pq_3p_0',np.complex128,self.pq_3p.shape),
+                  ('N_pq_3pn',np.int32),('pq_3pn_int',np.int32,self.pq_3pn_int.shape),('pq_3pn',np.complex128,self.pq_3pn.shape),('pq_3pn_0',np.complex128,self.pq_3pn.shape),
                   ('N_nodes_v',np.int32),('N_nodes_i',np.int32),('iters',np.int32),('N_nz_nodes',np.int32)] )
     
 
@@ -465,9 +531,10 @@ class pydss(object):
                                 self.Y_vv,self.Y_iv,
                                 self.inv_Y_ii,self.Y_ii.toarray(), 
                                 self.I_node,self.V_node,
-                                self.pq_1p_int,self.pq_1p,np.copy(self.pq_1p),
-                                self.pq_3p_int,self.pq_3p,np.copy(self.pq_3p),
-                                self.pq_3pn_int,self.pq_3pn,np.copy(self.pq_3pn),
+                                self.N_pq_1p, self.pq_1p_int,self.pq_1p,np.copy(self.pq_1p),
+                                self.N_pq_1pn, self.pq_1pn_int,self.pq_1pn,np.copy(self.pq_1pn),
+                                self.N_pq_3p, self.pq_3p_int,self.pq_3p,np.copy(self.pq_3p),
+                                self.N_pq_3pn, self.pq_3pn_int,self.pq_3pn,np.copy(self.pq_3pn),
                                 self.N_nodes_v,self.N_nodes_i,0,self.N_nz_nodes)],dtype=dt_pf)  
                   
         V_node,I_node = pf_eval(params_pf) 
@@ -651,20 +718,25 @@ class pydss(object):
                             'q_b':s_b.imag,
                             'q_c':s_c.imag})
             if N_nodes==4:   # if 3 phases + neutral
-                v_ag = V_sorted[-4]
-                v_bg = V_sorted[-3]
-                v_cg = V_sorted[-2]
-                v_ng = V_sorted[-1]
-                i_a = I_sorted[-4]
-                i_b = I_sorted[-3]
-                i_c = I_sorted[-2]
-                i_n = I_sorted[-1]
-                s_a = (v_ag-v_ng)*np.conj(i_a)
-                s_b = (v_bg-v_ng)*np.conj(i_b)
-                s_c = (v_cg-v_ng)*np.conj(i_c)
-                bus.update({'v_an':np.abs(v_ag-v_ng),
-                            'v_bn':np.abs(v_bg-v_ng),
-                            'v_cn':np.abs(v_cg-v_ng),
+                v_ag = V_sorted[start_node+0,0]
+                v_bg = V_sorted[start_node+1,0]
+                v_cg = V_sorted[start_node+2,0]
+                v_ng = V_sorted[start_node+3,0]
+                i_a = I_sorted[start_node+0,0]
+                i_b = I_sorted[start_node+1,0]
+                i_c = I_sorted[start_node+2,0]
+                i_n = I_sorted[start_node+3,0]  
+                
+                v_an = v_ag-v_ng
+                v_bn = v_bg-v_ng                
+                v_cn = v_cg-v_ng
+                
+                s_a = (v_an)*np.conj(i_a)
+                s_b = (v_bn)*np.conj(i_b)
+                s_c = (v_cn)*np.conj(i_c)
+                bus.update({'v_an':np.abs(v_an),
+                            'v_bn':np.abs(v_bn),
+                            'v_cn':np.abs(v_cn),
                             'v_ng':np.abs(v_ng)})
                 bus.update({'deg_an':np.angle(v_ag-v_ng, deg=True),
                             'deg_bn':np.angle(v_bg-v_ng, deg=True),
@@ -679,6 +751,8 @@ class pydss(object):
                 bus.update({'q_a':s_a.imag,
                             'q_b':s_b.imag,
                             'q_c':s_c.imag})
+    
+                start_node += 4
         self.V = np.array(V_sorted).reshape(len(V_sorted),1) 
         return 0 #self.V              
         
@@ -733,20 +807,36 @@ class pydss(object):
                         
         self.I_lines = I_lines
         for line in self.lines:
-            I_a = (I_lines[it_single_line,0])
-            I_b = (I_lines[it_single_line+1,0])
-            I_c = (I_lines[it_single_line+2,0])
-            #I_n = (I_lines[it_single_line+3,0])
-            I_n = I_a+I_b+I_c
-            it_single_line += len(line['bus_j_nodes'])
-            line.update({'i_a_m':np.abs(I_a)})
-            line.update({'i_b_m':np.abs(I_b)})
-            line.update({'i_c_m':np.abs(I_c)})
-            line.update({'i_n_m':np.abs(I_n)})
-            line.update({'deg_a':np.angle(I_a, deg=True)})
-            line.update({'deg_b':np.angle(I_b, deg=True)})
-            line.update({'deg_c':np.angle(I_c, deg=True)})
-            line.update({'deg_n':np.angle(I_n, deg=True)})
+            N_conductors = len(line['bus_j_nodes'])
+            if N_conductors == 3:
+                I_a = (I_lines[it_single_line,0])
+                I_b = (I_lines[it_single_line+1,0])
+                I_c = (I_lines[it_single_line+2,0])
+                #I_n = (I_lines[it_single_line+3,0])
+                I_n = I_a+I_b+I_c
+                it_single_line += N_conductors
+                line.update({'i_a_m':np.abs(I_a)})
+                line.update({'i_b_m':np.abs(I_b)})
+                line.update({'i_c_m':np.abs(I_c)})
+                line.update({'i_n_m':np.abs(I_n)})
+                line.update({'deg_a':np.angle(I_a, deg=True)})
+                line.update({'deg_b':np.angle(I_b, deg=True)})
+                line.update({'deg_c':np.angle(I_c, deg=True)})
+                line.update({'deg_n':np.angle(I_n, deg=True)})
+            if N_conductors == 4:
+                I_a = (I_lines[it_single_line,0])
+                I_b = (I_lines[it_single_line+1,0])
+                I_c = (I_lines[it_single_line+2,0])
+                I_n = (I_lines[it_single_line+3,0])
+                it_single_line += N_conductors
+                line.update({'i_a_m':np.abs(I_a)})
+                line.update({'i_b_m':np.abs(I_b)})
+                line.update({'i_c_m':np.abs(I_c)})
+                line.update({'i_n_m':np.abs(I_n)})
+                line.update({'deg_a':np.angle(I_a, deg=True)})
+                line.update({'deg_b':np.angle(I_b, deg=True)})
+                line.update({'deg_c':np.angle(I_c, deg=True)})
+                line.update({'deg_n':np.angle(I_n, deg=True)})            
         self.I_lines = I_lines
                         
 
@@ -787,15 +877,15 @@ class pydss(object):
         x = [item['pos_x'] for item in self.buses]
         y = [item['pos_y'] for item in self.buses]
         bus_id = [item['bus'] for item in self.buses]
-        v_an = [item['v_an'] for item in self.buses]
-        v_bn = [item['v_bn'] for item in self.buses]
-        v_cn = [item['v_cn'] for item in self.buses]
-        v_ng = [item['v_ng'] for item in self.buses]
+        v_an = ['{:2.2f}'.format(float(item['v_an'])) for item in self.buses]
+        v_bn = ['{:2.2f}'.format(float(item['v_bn'])) for item in self.buses]
+        v_cn = ['{:2.2f}'.format(float(item['v_cn'])) for item in self.buses]
+        v_ng = ['{:2.2f}'.format(float(item['v_ng'])) for item in self.buses]
 
-        deg_an = [item['deg_an'] for item in self.buses]
-        deg_bn = [item['deg_bn'] for item in self.buses]
-        deg_cn = [item['deg_cn'] for item in self.buses]
-        deg_ng = [item['deg_ng'] for item in self.buses]
+        deg_an = ['{:2.2f}'.format(float(item['deg_an'])) for item in self.buses]
+        deg_bn = ['{:2.2f}'.format(float(item['deg_bn'])) for item in self.buses]
+        deg_cn = ['{:2.2f}'.format(float(item['deg_cn'])) for item in self.buses]
+        deg_ng = ['{:2.2f}'.format(float(item['deg_ng'])) for item in self.buses]
         v_ab = [item['v_ab'] for item in self.buses]
         v_bc = [item['v_bc'] for item in self.buses]
         v_ca = [item['v_ca'] for item in self.buses]
@@ -960,7 +1050,7 @@ def trafo_yprim(S_n,U_1n,U_2n,Z_cc,connection='Dyg11'):
     
     '''
 
-    if connection=='Dyn11':
+    if connection=='Dyn1':
         z_a = Z_cc*1.0**2/S_n*3
         z_b = Z_cc*1.0**2/S_n*3
         z_c = Z_cc*1.0**2/S_n*3
@@ -1004,6 +1094,99 @@ def trafo_yprim(S_n,U_1n,U_2n,Z_cc,connection='Dyg11'):
         A_trafo[6,3] = 1.0
         A_trafo[6,7] = 1.0
         A_trafo[6,11] = 1.0
+
+
+    if connection=='Dyn5':
+        z_a = Z_cc*1.0**2/S_n*3
+        z_b = Z_cc*1.0**2/S_n*3
+        z_c = Z_cc*1.0**2/S_n*3
+        U_1 = U_1n
+        U_2 = U_2n/np.sqrt(3)
+        Z_B = np.array([[z_a, 0.0, 0.0],
+                        [0.0, z_b, 0.0],
+                        [0.0, 0.0, z_c],])                             
+        N_a = np.array([[ 1/U_1,     0],
+                         [-1/U_1,     0],
+                         [     0, 1/U_2],
+                         [     0,-1/U_2]])           
+        N_row_a = np.hstack((N_a,np.zeros((4,4))))
+        N_row_b = np.hstack((np.zeros((4,2)),N_a,np.zeros((4,2))))
+        N_row_c = np.hstack((np.zeros((4,4)),N_a))
+        
+        N = np.vstack((N_row_a,N_row_b,N_row_c))
+
+        B = np.array([[ 1, 0, 0],
+                      [-1, 0, 0],
+                      [ 0, 1, 0],
+                      [ 0,-1, 0],
+                      [ 0, 0, 1],
+                      [ 0, 0,-1]])
+    
+        Y_1 = B @ np.linalg.inv(Z_B) @ B.T
+        Y_w = N @ Y_1 @ N.T
+        A_trafo = np.zeros((7,12))
+
+        A_trafo[0,1] = 1.0
+        A_trafo[0,4] = 1.0
+        A_trafo[1,5] = 1.0
+        A_trafo[1,8] = 1.0
+        A_trafo[2,0] = 1.0
+        A_trafo[2,9] = 1.0
+
+        A_trafo[3,2] = 1.0
+        A_trafo[4,6] = 1.0
+        A_trafo[5,10] = 1.0
+        
+        A_trafo[6,3] = 1.0
+        A_trafo[6,7] = 1.0
+        A_trafo[6,11] = 1.0
+
+
+    if connection=='Dyn11':
+        z_a = Z_cc*1.0**2/S_n*3
+        z_b = Z_cc*1.0**2/S_n*3
+        z_c = Z_cc*1.0**2/S_n*3
+        U_1 = U_1n
+        U_2 = U_2n/np.sqrt(3)
+        Z_B = np.array([[z_a, 0.0, 0.0],
+                        [0.0, z_b, 0.0],
+                        [0.0, 0.0, z_c],])                             
+        N_a = np.array([[ 1/U_1,     0],
+                         [-1/U_1,     0],
+                         [     0, 1/U_2],
+                         [     0,-1/U_2]])           
+        N_row_a = np.hstack((N_a,np.zeros((4,4))))
+        N_row_b = np.hstack((np.zeros((4,2)),N_a,np.zeros((4,2))))
+        N_row_c = np.hstack((np.zeros((4,4)),N_a))
+        
+        N = np.vstack((N_row_a,N_row_b,N_row_c))
+
+        B = np.array([[ 1, 0, 0],
+                      [-1, 0, 0],
+                      [ 0, 1, 0],
+                      [ 0,-1, 0],
+                      [ 0, 0, 1],
+                      [ 0, 0,-1]])
+    
+        Y_1 = B @ np.linalg.inv(Z_B) @ B.T
+        Y_w = N @ Y_1 @ N.T
+        A_trafo = np.zeros((7,12))
+
+        A_trafo[0,1] = 1.0
+        A_trafo[0,4] = 1.0
+        A_trafo[1,5] = 1.0
+        A_trafo[1,8] = 1.0
+        A_trafo[2,0] = 1.0
+        A_trafo[2,9] = 1.0
+
+        A_trafo[3,3] = 1.0
+        A_trafo[4,7] = 1.0
+        A_trafo[5,11] = 1.0
+        
+        A_trafo[6,2] = 1.0
+        A_trafo[6,6] = 1.0
+        A_trafo[6,10] = 1.0
+
         
     if connection=='Dyg11_3w':
         z_a = Z_cc*1.0**2/S_n*3
@@ -1211,8 +1394,17 @@ def opendss2pydss(self,files_dict):
 
 if __name__ == "__main__":
     import time 
-    test ='cigre_lv'
-    
+    test ='luna_1'
+
+    if test=='luna_1': 
+        sys1 = pydss()
+        t_0 = time.time()
+        sys1.read('./luna/luna_1_4w.json')  # Load data
+        sys1.pf()
+#        sys1.get_v()
+#        sys1.get_i()
+#        print('iters: ', sys1.params_pf['iters'])
+        
     if test=='cigre_lv': 
         sys1 = pydss()
         t_0 = time.time()

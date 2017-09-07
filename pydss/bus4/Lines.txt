@@ -1,3 +1,0 @@
-New Line.LINE1 Bus1=1 Bus2=2 phases=3 Linecode=4c_70 Length=10 Units=m
-New Line.LINE2 Bus1=2 Bus2=3 phases=3 Linecode=4c_70 Length=50 Units=m
-

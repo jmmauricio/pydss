@@ -1,2 +1,2 @@
 # pydss
-Python distribution system simulator
+Python Distribution System Simulator
